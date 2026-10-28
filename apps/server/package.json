@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node index.js"
+    "dev": "cross-env YPERSISTENCE=./yjs-data y-port=1234 npx y-websocket",
+    "dev:no-persist": "cross-env y-port=1234 npx y-websocket"
   },
   "dependencies": {
-    "level": "^8.0.0",
-    "ws": "^8.16.0",
-    "y-leveldb": "^0.1.2",
-    "y-websocket": "1.5.3"
+    "y-websocket": "1.5.3",
+    "cross-env": "^7.0.3"
   }
 }
