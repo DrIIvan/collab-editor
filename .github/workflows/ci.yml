@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    name: Client (build + Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build --workspace=apps/client
+
+      - name: Build client Docker image
+        run: docker build -f apps/client/Dockerfile -t collab-editor-client:ci .
+
+  server:
+    name: Server (WebSocket + Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start server and test its WebSocket directly
+        env:
+          HOST: 127.0.0.1
+          PORT: "1234"
+          YPERSISTENCE: ${{ runner.temp }}/yjs-ci-data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$YPERSISTENCE"
+          nohup node apps/server/server.mjs > "$RUNNER_TEMP/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          ready=false
+          for attempt in {1..30}; do
+            if node -e 'const net=require("node:net");const s=net.connect(1234,"127.0.0.1",()=>{s.end();process.exit(0)});s.on("error",()=>process.exit(1));setTimeout(()=>{s.destroy();process.exit(1)},1000)' ; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" != "true" ]; then
+            cat "$RUNNER_TEMP/server.log"
+            exit 1
+          fi
+
+          if ! npm run smoke:websocket -- ws://127.0.0.1:1234/ci-server-smoke; then
+            cat "$RUNNER_TEMP/server.log"
+            exit 1
+          fi
+
+      - name: Build server Docker image
+        run: docker build -f apps/server/Dockerfile -t collab-editor-server:ci .
+
+      - name: Dump server log on failure
+        if: failure()
+        run: if [ -f "$RUNNER_TEMP/server.log" ]; then cat "$RUNNER_TEMP/server.log"; fi
+

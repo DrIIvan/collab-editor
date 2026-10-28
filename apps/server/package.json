@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "cross-env YPERSISTENCE=./yjs-data y-port=1234 npx y-websocket",
-    "dev:no-persist": "cross-env y-port=1234 npx y-websocket"
+    "dev:no-persist": "cross-env y-port=1234 npx y-websocket",
+    "start": "y-websocket"
   },
   "dependencies": {
-    "y-websocket": "1.5.3",
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "y-leveldb": "^0.1.2",
+    "y-websocket": "1.5.3"
   }
 }
