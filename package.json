@@ -13,8 +13,7 @@
   "devDependencies": {
     "concurrently": "^8.2.0"
   },
-  "allowScripts": {
-    "esbuild@0.21.5": true,
-    "leveldown@5.6.0": true
+  "dependencies": {
+    "@tiptap/extension-collaboration-cursor": "^2.26.2"
   }
 }

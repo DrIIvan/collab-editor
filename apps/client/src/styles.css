@@ -1,0 +1,35 @@
+
+/* Контейнер курсора другого участника */
+.collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid var(--caret-color, #ff6b6b);
+  border-right: 2px solid var(--caret-color, #ff6b6b);
+  pointer-events: none;
+  overflow-wrap: normal;
+}
+
+/* Плашка с именем участника */
+.collaboration-carets__label {
+  position: absolute;
+  z-index: 10;
+  top: -1.5em;
+  left: -1px;
+  padding: 2px 6px;
+  border-radius: 3px 3px 3px 0;
+  background-color: var(--caret-color, #ff6b6b);
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Цвет выделенного текста другого участника */
+.collaboration-carets__selection {
+  background-color: rgba(255, 107, 107, 0.2);
+}
