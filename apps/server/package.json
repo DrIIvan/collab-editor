@@ -1,0 +1,14 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "level": "^8.0.0",
+    "ws": "^8.16.0",
+    "y-leveldb": "^0.1.2",
+    "y-websocket": "1.5.3"
+  }
+}
