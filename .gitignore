@@ -1,0 +1,12 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.env
+.env.*
+!.env.example
+apps/server/yjs-data/
+**/yjs-data/
+npm-debug.log*
+playwright-report/
+test-results/
