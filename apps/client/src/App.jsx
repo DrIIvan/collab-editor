@@ -6,7 +6,7 @@ import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 
-const SERVER_URL = 'ws://localhost:1234';
+const SERVER_URL = 'wss://server-collab.cloudpub.ru';
 
 const PALETTE = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
