@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$YPERSISTENCE"
-          nohup node apps/server/server.mjs > "$RUNNER_TEMP/server.log" 2>&1 &
+          nohup npm run start --workspace=apps/server > "$RUNNER_TEMP/server.log" 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
@@ -94,3 +94,54 @@ jobs:
         if: failure()
         run: if [ -f "$RUNNER_TEMP/server.log" ]; then cat "$RUNNER_TEMP/server.log"; fi
 
+
+  integration:
+    name: Integration (Compose + HTTP + WebSocket)
+    runs-on: ubuntu-latest
+    needs: [client, server]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Build and start app
+        run: docker compose up -d --build server web
+
+      - name: HTTP smoke tests through nginx
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://localhost:8081/health >/dev/null \
+              && curl --fail --silent --show-error --head http://localhost:8081/ >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != "true" ]; then
+            docker compose ps
+            docker compose logs --no-color
+            exit 1
+          fi
+          echo "HTTP smoke tests passed"
+
+      - name: WebSocket smoke test through nginx
+        run: npm run smoke:websocket -- ws://127.0.0.1:8081/ws/ci-smoke
+
+      - name: Dump Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop Compose services
+        if: always()
+        run: docker compose down --volumes --remove-orphans
