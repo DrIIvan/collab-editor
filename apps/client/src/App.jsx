@@ -9,9 +9,16 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
+import MenuBar from "../components/MenuBar/MenuBar";
 
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
+
+// ↓ это если запускаешь через npm run dev
 const SERVER_URL = "ws://localhost:1234";
+// ↓ это если запускаешь через докер
+// const SERVER_URL =
+//   import.meta.env.VITE_WS_URL ||
+//   `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 const PALETTE = [
   "#FF6B6B",
@@ -215,6 +222,7 @@ function SaveIndicator({ provider }) {
       style={{
         display: "flex",
         alignItems: "center",
+
         gap: "6px",
         fontSize: "13px",
         fontFamily: "monospace",
@@ -235,7 +243,15 @@ function SaveIndicator({ provider }) {
 }
 
 // Редактор
-function TipTapEditor({ provider, yDoc, userName, userColor, clientId, editorRef }) {
+function TipTapEditor({
+  provider,
+  yDoc,
+  userName,
+  userColor,
+  clientId,
+  header,
+  editorRef,
+}) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ undoRedo: false }),
@@ -248,7 +264,7 @@ function TipTapEditor({ provider, yDoc, userName, userColor, clientId, editorRef
     editorProps: {
       attributes: {
         style:
-          "outline: none; min-height: 500px; padding: 20px; font-family: Georgia, serif; font-size: 16px; line-height: 1.6;",
+          "outline: none; min-height: 500px; padding: 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4;",
       },
     },
   });
@@ -262,177 +278,30 @@ function TipTapEditor({ provider, yDoc, userName, userColor, clientId, editorRef
   if (!editor) {
     return <div style={{ padding: "20px" }}>Загрузка редактора...</div>;
   }
-
-  return <EditorContent editor={editor} />;
-}
-
-// Конвертер ProseMirror JSON в структуру docx
-function convertTiptapJsonToDocx(json) {
-  const children = [];
-
-  const processMarks = (text, marks = []) => {
-    const options = { text };
-    marks.forEach(mark => {
-      switch (mark.type) {
-        case "bold":
-          options.bold = true;
-          break;
-        case "italic":
-          options.italics = true;
-          break;
-        case "strike":
-          options.strike = true;
-          break;
-        case "code":
-          options.font = { name: "Courier New" };
-          options.shading = { fill: "E0E0E0" };
-          break;
-      }
-    });
-    return new TextRun(options);
-  };
-
-  const processContent = (content) => {
-    if (!content) return [];
-    
-    return content.map(node => {
-      if (node.type === "text") {
-        const linkMark = node.marks?.find(m => m.type === "link");
-        if (linkMark) {
-          return new ExternalHyperlink({
-            link: linkMark.attrs.href,
-            children: [
-              new TextRun({
-                text: node.text,
-                color: "0563C1",
-                underline: {},
-              }),
-            ],
-          });
-        }
-        return processMarks(node.text, node.marks);
-      }
-      return null;
-    }).filter(Boolean);
-  };
-
-  json.content?.forEach(node => {
-    switch (node.type) {
-      case "paragraph": {
-        const runs = processContent(node.content);
-        children.push(new Paragraph({ children: runs }));
-        break;
-      }
-      case "heading": {
-        const runs = processContent(node.content);
-        const level = node.attrs?.level || 1;
-        const headingLevel = [
-          HeadingLevel.HEADING_1,
-          HeadingLevel.HEADING_2,
-          HeadingLevel.HEADING_3,
-          HeadingLevel.HEADING_4,
-          HeadingLevel.HEADING_5,
-          HeadingLevel.HEADING_6,
-        ][level - 1] || HeadingLevel.HEADING_1;
-        
-        children.push(new Paragraph({
-          children: runs,
-          heading: headingLevel,
-        }));
-        break;
-      }
-      case "bulletList": {
-        node.content?.forEach(item => {
-          if (item.type === "listItem") {
-            item.content?.forEach(para => {
-              if (para.type === "paragraph") {
-                const runs = processContent(para.content);
-                children.push(new Paragraph({
-                  children: runs,
-                  bullet: { level: 0 },
-                }));
-              }
-            });
-          }
-        });
-        break;
-      }
-      case "orderedList": {
-        node.content?.forEach(item => {
-          if (item.type === "listItem") {
-            item.content?.forEach(para => {
-              if (para.type === "paragraph") {
-                const runs = processContent(para.content);
-                children.push(new Paragraph({
-                  children: runs,
-                  numbering: { reference: "default-numbering", level: 0 },
-                }));
-              }
-            });
-          }
-        });
-        break;
-      }
-      case "blockquote": {
-        node.content?.forEach(para => {
-          if (para.type === "paragraph") {
-            const runs = processContent(para.content);
-            children.push(new Paragraph({
-              children: runs,
-              indent: { left: 720 },
-              border: {
-                left: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
-              },
-            }));
-          }
-        });
-        break;
-      }
-      case "codeBlock": {
-        node.content?.forEach(textNode => {
-          if (textNode.type === "text") {
-            children.push(new Paragraph({
-              children: [new TextRun({
-                text: textNode.text,
-                font: { name: "Courier New" },
-                size: 20,
-              })],
-              shading: { fill: "F5F5F5" },
-              spacing: { before: 240, after: 240 },
-            }));
-          }
-        });
-        break;
-      }
-      case "horizontalRule": {
-        children.push(new Paragraph({
-          children: [],
-          border: {
-            bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
-          },
-        }));
-        break;
-      }
-    }
-  });
-
-  return new Document({
-    numbering: {
-      config: [{
-        reference: "default-numbering",
-        levels: [{
-          level: 0,
-          format: "decimal",
-          text: "%1.",
-          alignment: AlignmentType.LEFT,
-        }],
-      }],
-    },
-    sections: [{
-      properties: {},
-      children: children.length > 0 ? children : [new Paragraph({ children: [] })],
-    }],
-  });
+  return (
+    <>
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          background: "#fff",
+        }}
+      >
+        {header}
+        <MenuBar editor={editor} />
+      </div>{" "}
+      <div
+        style={{
+          maxWidth: "800px",
+          margin: "0 auto",
+          padding: "20px",
+        }}
+      >
+        <EditorContent editor={editor} />
+      </div>
+    </>
+  );
 }
 
 function App() {
@@ -548,154 +417,115 @@ function App() {
         fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
-      {/* Верхний бар */}
-      <div
-        style={{
-          borderBottom: "1px solid #000",
-          padding: "12px 20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-          }}
-        >
-          <h1
-            style={{
-              fontSize: "16px",
-              fontWeight: 600,
-              fontFamily: "monospace",
-              margin: 0,
-            }}
-          >
-            Doc: {docId}
-          </h1>
-          <SaveIndicator provider={provider} />
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            onClick={copyLink}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#000",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            Поделиться ссылкой
-          </button>
-          <button
-            onClick={createNewDoc}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            Новый документ
-          </button>
-          {/* Скрытый инпут для выбора файла */}
-          <input
-            type="file"
-            accept=".docx"
-            ref={fileInputRef}
-            onChange={importDocx}
-            style={{ display: "none" }}
-          />
-          {/* Кнопки импорта и экспорта */}
-          <button
-            onClick={triggerImport}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            Импорт .docx
-          </button>
-          <button
-            onClick={exportDocx}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            Экспорт в .docx
-          </button>
-        </div>
-      </div>
-
-      {/* Панель участников */}
-      <div
-        style={{
-          padding: "12px 20px",
-          borderBottom: "1px solid #e0e0e0",
-          background: "#fafafa",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "12px",
-            color: "#666",
-            marginBottom: "8px",
-            fontFamily: "monospace",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
-          Участники ({provider.awareness.getStates().size})
-        </div>
-        <PresenceBar
-          awareness={provider.awareness}
-          currentUser={{ clientId }}
-        />
-      </div>
-
       {/* Редактор */}
-      <div
-        style={{
-          maxWidth: "800px",
-          margin: "0 auto",
-          padding: "20px",
-        }}
-      >
+      <div>
         <TipTapEditor
           provider={provider}
           yDoc={yDoc.current}
           userName={userName}
           userColor={userColor}
           clientId={clientId}
-          editorRef={editorRef}
+          header={
+            <>
+              {/* Верхний бар */}
+              <div
+                style={{
+                  borderBottom: "1px solid #000",
+                  padding: "12px 20px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                  }}
+                >
+                  <h1
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: 600,
+                      fontFamily: "monospace",
+                      margin: 0,
+                    }}
+                  >
+                    Doc: {docId}
+                  </h1>
+                  <SaveIndicator provider={provider} />
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    onClick={copyLink}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#000",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Поделиться ссылкой
+                  </button>
+                  <button
+                    onClick={createNewDoc}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Новый документ
+                  </button>
+                </div>
+              </div>
+
+              {/* Панель участников */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderBottom: "1px solid #e0e0e0",
+                  background: "#fafafa",
+                }}
+              >
+                <div
+                  style={{
+                    position: "sticky",
+
+                    fontSize: "12px",
+                    color: "#666",
+                    marginBottom: "8px",
+                    fontFamily: "monospace",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Участники ({provider.awareness.getStates().size})
+                </div>
+                <PresenceBar
+                  awareness={provider.awareness}
+                  currentUser={{ clientId }}
+                />
+              </div>
+            </>
+          }
         />
       </div>
     </div>
