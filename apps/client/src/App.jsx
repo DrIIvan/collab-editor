@@ -1,3 +1,5 @@
+import mammoth from "mammoth";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, ExternalHyperlink } from "docx";
 import React, { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -233,12 +235,10 @@ function SaveIndicator({ provider }) {
 }
 
 // Редактор
-function TipTapEditor({ provider, yDoc, userName, userColor, clientId }) {
+function TipTapEditor({ provider, yDoc, userName, userColor, clientId, editorRef }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        undoRedo: false,
-      }),
+      StarterKit.configure({ undoRedo: false }),
       Collaboration.configure({ document: yDoc }),
       CollaborationCaret.configure({
         provider,
@@ -253,20 +253,186 @@ function TipTapEditor({ provider, yDoc, userName, userColor, clientId }) {
     },
   });
 
-//   useEffect(() => {
-//     if (editor && provider) {
-//       provider.awareness.setLocalStateField("user", {
-//         name: userName,
-//         color: userColor,
-//       });
-//     }
-//   }, [editor, provider, userName, userColor]);
+  useEffect(() => {
+    if (editor && editorRef) {
+      editorRef.current = editor;
+    }
+  }, [editor, editorRef]);
 
   if (!editor) {
     return <div style={{ padding: "20px" }}>Загрузка редактора...</div>;
   }
 
   return <EditorContent editor={editor} />;
+}
+
+// Конвертер ProseMirror JSON в структуру docx
+function convertTiptapJsonToDocx(json) {
+  const children = [];
+
+  const processMarks = (text, marks = []) => {
+    const options = { text };
+    marks.forEach(mark => {
+      switch (mark.type) {
+        case "bold":
+          options.bold = true;
+          break;
+        case "italic":
+          options.italics = true;
+          break;
+        case "strike":
+          options.strike = true;
+          break;
+        case "code":
+          options.font = { name: "Courier New" };
+          options.shading = { fill: "E0E0E0" };
+          break;
+      }
+    });
+    return new TextRun(options);
+  };
+
+  const processContent = (content) => {
+    if (!content) return [];
+    
+    return content.map(node => {
+      if (node.type === "text") {
+        const linkMark = node.marks?.find(m => m.type === "link");
+        if (linkMark) {
+          return new ExternalHyperlink({
+            link: linkMark.attrs.href,
+            children: [
+              new TextRun({
+                text: node.text,
+                color: "0563C1",
+                underline: {},
+              }),
+            ],
+          });
+        }
+        return processMarks(node.text, node.marks);
+      }
+      return null;
+    }).filter(Boolean);
+  };
+
+  json.content?.forEach(node => {
+    switch (node.type) {
+      case "paragraph": {
+        const runs = processContent(node.content);
+        children.push(new Paragraph({ children: runs }));
+        break;
+      }
+      case "heading": {
+        const runs = processContent(node.content);
+        const level = node.attrs?.level || 1;
+        const headingLevel = [
+          HeadingLevel.HEADING_1,
+          HeadingLevel.HEADING_2,
+          HeadingLevel.HEADING_3,
+          HeadingLevel.HEADING_4,
+          HeadingLevel.HEADING_5,
+          HeadingLevel.HEADING_6,
+        ][level - 1] || HeadingLevel.HEADING_1;
+        
+        children.push(new Paragraph({
+          children: runs,
+          heading: headingLevel,
+        }));
+        break;
+      }
+      case "bulletList": {
+        node.content?.forEach(item => {
+          if (item.type === "listItem") {
+            item.content?.forEach(para => {
+              if (para.type === "paragraph") {
+                const runs = processContent(para.content);
+                children.push(new Paragraph({
+                  children: runs,
+                  bullet: { level: 0 },
+                }));
+              }
+            });
+          }
+        });
+        break;
+      }
+      case "orderedList": {
+        node.content?.forEach(item => {
+          if (item.type === "listItem") {
+            item.content?.forEach(para => {
+              if (para.type === "paragraph") {
+                const runs = processContent(para.content);
+                children.push(new Paragraph({
+                  children: runs,
+                  numbering: { reference: "default-numbering", level: 0 },
+                }));
+              }
+            });
+          }
+        });
+        break;
+      }
+      case "blockquote": {
+        node.content?.forEach(para => {
+          if (para.type === "paragraph") {
+            const runs = processContent(para.content);
+            children.push(new Paragraph({
+              children: runs,
+              indent: { left: 720 },
+              border: {
+                left: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
+              },
+            }));
+          }
+        });
+        break;
+      }
+      case "codeBlock": {
+        node.content?.forEach(textNode => {
+          if (textNode.type === "text") {
+            children.push(new Paragraph({
+              children: [new TextRun({
+                text: textNode.text,
+                font: { name: "Courier New" },
+                size: 20,
+              })],
+              shading: { fill: "F5F5F5" },
+              spacing: { before: 240, after: 240 },
+            }));
+          }
+        });
+        break;
+      }
+      case "horizontalRule": {
+        children.push(new Paragraph({
+          children: [],
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
+          },
+        }));
+        break;
+      }
+    }
+  });
+
+  return new Document({
+    numbering: {
+      config: [{
+        reference: "default-numbering",
+        levels: [{
+          level: 0,
+          format: "decimal",
+          text: "%1.",
+          alignment: AlignmentType.LEFT,
+        }],
+      }],
+    },
+    sections: [{
+      properties: {},
+      children: children.length > 0 ? children : [new Paragraph({ children: [] })],
+    }],
+  });
 }
 
 function App() {
@@ -278,6 +444,55 @@ function App() {
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
   const userColor = getColor(clientId);
+
+  const fileInputRef = useRef(null);
+  const editorRef = useRef(null);
+
+  const exportDocx = async () => {
+    if (!editorRef.current) return;
+    
+    try {
+      const json = editorRef.current.getJSON();
+      const doc = convertTiptapJsonToDocx(json);
+      const blob = await Packer.toBlob(doc);
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `document-${docId}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Ошибка экспорта:", error);
+      alert("Не удалось экспортировать документ");
+    }
+  };
+  const importDocx = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !editorRef.current) return;
+    
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const { value: html } = await mammoth.convertToHtml({ arrayBuffer });
+
+      const editor = editorRef.current;
+      const { state, view } = editor;
+      const endPos = state.doc.content.size;
+      
+      editor.commands.insertContentAt(endPos, html);
+
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error) {
+      console.error("Ошибка импорта:", error);
+      alert("Не удалось импортировать документ: " + error.message);
+    }
+  };
+
+  const triggerImport = () => {
+    fileInputRef.current?.click();
+  };
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -400,6 +615,43 @@ function App() {
           >
             Новый документ
           </button>
+          {/* Скрытый инпут для выбора файла */}
+          <input
+            type="file"
+            accept=".docx"
+            ref={fileInputRef}
+            onChange={importDocx}
+            style={{ display: "none" }}
+          />
+          {/* Кнопки импорта и экспорта */}
+          <button
+            onClick={triggerImport}
+            style={{
+              padding: "8px 16px",
+              fontSize: "14px",
+              background: "#fff",
+              color: "#000",
+              border: "1px solid #000",
+              cursor: "pointer",
+              fontFamily: "monospace",
+            }}
+          >
+            Импорт .docx
+          </button>
+          <button
+            onClick={exportDocx}
+            style={{
+              padding: "8px 16px",
+              fontSize: "14px",
+              background: "#fff",
+              color: "#000",
+              border: "1px solid #000",
+              cursor: "pointer",
+              fontFamily: "monospace",
+            }}
+          >
+            Экспорт в .docx
+          </button>
         </div>
       </div>
 
@@ -443,6 +695,7 @@ function App() {
           userName={userName}
           userColor={userColor}
           clientId={clientId}
+          editorRef={editorRef}
         />
       </div>
     </div>
