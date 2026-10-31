@@ -7,9 +7,16 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
+import MenuBar from "../components/MenuBar/MenuBar";
 
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
+
+// ↓ это если запускаешь через npm run dev
 const SERVER_URL = "ws://localhost:1234";
+// ↓ это если запускаешь через докер
+// const SERVER_URL =
+//   import.meta.env.VITE_WS_URL ||
+//   `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 const PALETTE = [
   "#FF6B6B",
@@ -213,6 +220,7 @@ function SaveIndicator({ provider }) {
       style={{
         display: "flex",
         alignItems: "center",
+
         gap: "6px",
         fontSize: "13px",
         fontFamily: "monospace",
@@ -233,7 +241,14 @@ function SaveIndicator({ provider }) {
 }
 
 // Редактор
-function TipTapEditor({ provider, yDoc, userName, userColor, clientId }) {
+function TipTapEditor({
+  provider,
+  yDoc,
+  userName,
+  userColor,
+  clientId,
+  header,
+}) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -248,25 +263,47 @@ function TipTapEditor({ provider, yDoc, userName, userColor, clientId }) {
     editorProps: {
       attributes: {
         style:
-          "outline: none; min-height: 500px; padding: 20px; font-family: Georgia, serif; font-size: 16px; line-height: 1.6;",
+          "outline: none; min-height: 500px; padding: 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4;",
       },
     },
   });
 
-//   useEffect(() => {
-//     if (editor && provider) {
-//       provider.awareness.setLocalStateField("user", {
-//         name: userName,
-//         color: userColor,
-//       });
-//     }
-//   }, [editor, provider, userName, userColor]);
+  //   useEffect(() => {
+  //     if (editor && provider) {
+  //       provider.awareness.setLocalStateField("user", {
+  //         name: userName,
+  //         color: userColor,
+  //       });
+  //     }
+  //   }, [editor, provider, userName, userColor]);
 
   if (!editor) {
     return <div style={{ padding: "20px" }}>Загрузка редактора...</div>;
   }
-
-  return <EditorContent editor={editor} />;
+  return (
+    <>
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          background: "#fff",
+        }}
+      >
+        {header}
+        <MenuBar editor={editor} />
+      </div>{" "}
+      <div
+        style={{
+          maxWidth: "800px",
+          margin: "0 auto",
+          padding: "20px",
+        }}
+      >
+        <EditorContent editor={editor} />
+      </div>
+    </>
+  );
 }
 
 function App() {
@@ -333,116 +370,115 @@ function App() {
         fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
-      {/* Верхний бар */}
-      <div
-        style={{
-          borderBottom: "1px solid #000",
-          padding: "12px 20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-          }}
-        >
-          <h1
-            style={{
-              fontSize: "16px",
-              fontWeight: 600,
-              fontFamily: "monospace",
-              margin: 0,
-            }}
-          >
-            Doc: {docId}
-          </h1>
-          <SaveIndicator provider={provider} />
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            onClick={copyLink}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#000",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            Поделиться ссылкой
-          </button>
-          <button
-            onClick={createNewDoc}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            Новый документ
-          </button>
-        </div>
-      </div>
-
-      {/* Панель участников */}
-      <div
-        style={{
-          padding: "12px 20px",
-          borderBottom: "1px solid #e0e0e0",
-          background: "#fafafa",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "12px",
-            color: "#666",
-            marginBottom: "8px",
-            fontFamily: "monospace",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
-          Участники ({provider.awareness.getStates().size})
-        </div>
-        <PresenceBar
-          awareness={provider.awareness}
-          currentUser={{ clientId }}
-        />
-      </div>
-
       {/* Редактор */}
-      <div
-        style={{
-          maxWidth: "800px",
-          margin: "0 auto",
-          padding: "20px",
-        }}
-      >
+      <div>
         <TipTapEditor
           provider={provider}
           yDoc={yDoc.current}
           userName={userName}
           userColor={userColor}
           clientId={clientId}
+          header={
+            <>
+              {/* Верхний бар */}
+              <div
+                style={{
+                  borderBottom: "1px solid #000",
+                  padding: "12px 20px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                  }}
+                >
+                  <h1
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: 600,
+                      fontFamily: "monospace",
+                      margin: 0,
+                    }}
+                  >
+                    Doc: {docId}
+                  </h1>
+                  <SaveIndicator provider={provider} />
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    onClick={copyLink}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#000",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Поделиться ссылкой
+                  </button>
+                  <button
+                    onClick={createNewDoc}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Новый документ
+                  </button>
+                </div>
+              </div>
+
+              {/* Панель участников */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderBottom: "1px solid #e0e0e0",
+                  background: "#fafafa",
+                }}
+              >
+                <div
+                  style={{
+                    position: "sticky",
+
+                    fontSize: "12px",
+                    color: "#666",
+                    marginBottom: "8px",
+                    fontFamily: "monospace",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Участники ({provider.awareness.getStates().size})
+                </div>
+                <PresenceBar
+                  awareness={provider.awareness}
+                  currentUser={{ clientId }}
+                />
+              </div>
+            </>
+          }
         />
       </div>
     </div>

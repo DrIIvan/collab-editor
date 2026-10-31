@@ -33,3 +33,76 @@
 .collaboration-carets__selection {
   background-color: rgba(255, 107, 107, 0.2);
 }
+
+
+/* Стили содержимого редактора (как в примере из документации Tiptap) */
+.tiptap > * + * {
+  margin-top: 0.75em;
+}
+ 
+.tiptap h1,
+.tiptap h2,
+.tiptap h3,
+.tiptap h4,
+.tiptap h5,
+.tiptap h6 {
+  line-height: 1.1;
+  margin-top: 1.2em;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif, "Noto Color Emoji";
+}
+.tiptap h1 { font-size: 2em; }
+.tiptap h2 { font-size: 1.5em; }
+.tiptap h3 { font-size: 1.25em; }
+.tiptap h4 { font-size: 1.1em; }
+.tiptap h5 { font-size: 1em; }
+.tiptap h6 { font-size: 0.9em; }
+ 
+.tiptap ul,
+.tiptap ol {
+  padding: 0 1.5rem;
+}
+.tiptap ul { list-style: disc; }
+.tiptap ol { list-style: decimal; }
+.tiptap li > p { margin: 0; }
+ 
+.tiptap code {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  padding: 0.1em 0.3em;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+ 
+.tiptap pre {
+  background: #111;
+  color: #fff;
+  font-family: monospace;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.tiptap pre code {
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 0;
+  font-size: 0.85rem;
+}
+ 
+.tiptap blockquote {
+  padding-left: 1rem;
+  border-left: 3px solid #000;
+  margin-left: 0;
+}
+ 
+.tiptap hr {
+  border: none;
+  border-top: 2px solid #000;
+  margin: 1.5rem 0;
+}
+ 
+.tiptap a {
+  color: #0645ad;
+  text-decoration: underline;
+  cursor: pointer;
+}
+ 
