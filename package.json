@@ -8,7 +8,8 @@
     "dev:server": "npm run dev --workspace=apps/server",
     "dev:client": "npm run dev --workspace=apps/client",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "smoke:websocket": "node scripts/smoke-websocket.mjs"
+    "smoke:websocket": "node scripts/smoke-websocket.mjs",
+    "smoke:docx": "node scripts/smoke-docx.mjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

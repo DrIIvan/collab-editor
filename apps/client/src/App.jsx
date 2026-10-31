@@ -8,6 +8,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
 import MenuBar from "../components/MenuBar/MenuBar";
+import { downloadDocx, importDocx } from "./lib/docx";
 
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
 
@@ -290,7 +291,7 @@ function TipTapEditor({
           background: "#fff",
         }}
       >
-        {header}
+        {typeof header === "function" ? header(editor) : header}
         <MenuBar editor={editor} />
       </div>{" "}
       <div
@@ -311,6 +312,8 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [userName, setUserName] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [docxStatus, setDocxStatus] = useState("");
+  const importFileRef = useRef(null);
 
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
@@ -354,6 +357,60 @@ function App() {
     window.location.href = "/d/" + newId;
   };
 
+  const handleDocxImport = async (editor, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      window.alert("Выберите файл в формате DOCX.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      window.alert("Размер DOCX-файла не должен превышать 25 МБ.");
+      return;
+    }
+
+    if (!window.confirm("Содержимое DOCX будет добавлено в конец текущего документа у всех участников. Продолжить?")) {
+      return;
+    }
+
+    try {
+      setDocxStatus("Импорт DOCX...");
+      const importedDocument = await importDocx(await file.arrayBuffer());
+
+      // Insert at the document's end instead of setContent(), which replaces
+      // the entire shared document. A single TipTap transaction keeps the
+      // append operation synchronized to every connected Yjs collaborator.
+      const endPosition = editor.state.doc.content.size;
+      const inserted = editor.commands.insertContentAt(
+        endPosition,
+        importedDocument.content,
+        { updateSelection: true },
+      );
+      if (!inserted) {
+        throw new Error("Не удалось добавить содержимое DOCX в документ.");
+      }
+
+      setDocxStatus(`Добавлено в конец документа: ${file.name}`);
+    } catch (error) {
+      console.error("DOCX import failed:", error);
+      setDocxStatus("");
+      window.alert(error instanceof Error ? error.message : "Не удалось импортировать DOCX-файл.");
+    }
+  };
+
+  const handleDocxExport = (editor) => {
+    try {
+      const safeDocId = docId.replace(/[^a-zA-Z0-9._-]/g, "-");
+      downloadDocx(editor.getJSON(), `document-${safeDocId}.docx`);
+      setDocxStatus("DOCX-файл подготовлен к скачиванию");
+    } catch (error) {
+      console.error("DOCX export failed:", error);
+      window.alert(error instanceof Error ? error.message : "Не удалось экспортировать документ в DOCX.");
+    }
+  };
+
   if (showModal) {
     return <NameModal onSubmit={handleNameSubmit} />;
   }
@@ -378,7 +435,7 @@ function App() {
           userName={userName}
           userColor={userColor}
           clientId={clientId}
-          header={
+          header={(editor) => (
             <>
               {/* Верхний бар */}
               <div
@@ -419,6 +476,42 @@ function App() {
                     flexWrap: "wrap",
                   }}
                 >
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    aria-label="Выбрать DOCX-файл для импорта"
+                    style={{ display: "none" }}
+                    onChange={(event) => handleDocxImport(editor, event)}
+                  />
+                  <button
+                    onClick={() => importFileRef.current?.click()}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Импорт DOCX
+                  </button>
+                  <button
+                    onClick={() => handleDocxExport(editor)}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Экспорт DOCX
+                  </button>
                   <button
                     onClick={copyLink}
                     style={{
@@ -449,6 +542,15 @@ function App() {
                   </button>
                 </div>
               </div>
+              {docxStatus && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{ padding: "6px 20px", fontSize: "12px", color: "#555", fontFamily: "monospace" }}
+                >
+                  {docxStatus}
+                </div>
+              )}
 
               {/* Панель участников */}
               <div
@@ -478,7 +580,7 @@ function App() {
                 />
               </div>
             </>
-          }
+          )}
         />
       </div>
     </div>
