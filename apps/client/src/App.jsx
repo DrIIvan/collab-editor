@@ -1,5 +1,3 @@
-import mammoth from "mammoth";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, ExternalHyperlink } from "docx";
 import React, { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -10,6 +8,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
 import MenuBar from "../components/MenuBar/MenuBar";
+import { downloadDocx, importDocx } from "./lib/docx";
 
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
 
@@ -250,11 +249,12 @@ function TipTapEditor({
   userColor,
   clientId,
   header,
-  editorRef,
 }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ undoRedo: false }),
+      StarterKit.configure({
+        undoRedo: false,
+      }),
       Collaboration.configure({ document: yDoc }),
       CollaborationCaret.configure({
         provider,
@@ -269,11 +269,14 @@ function TipTapEditor({
     },
   });
 
-  useEffect(() => {
-    if (editor && editorRef) {
-      editorRef.current = editor;
-    }
-  }, [editor, editorRef]);
+  //   useEffect(() => {
+  //     if (editor && provider) {
+  //       provider.awareness.setLocalStateField("user", {
+  //         name: userName,
+  //         color: userColor,
+  //       });
+  //     }
+  //   }, [editor, provider, userName, userColor]);
 
   if (!editor) {
     return <div style={{ padding: "20px" }}>Загрузка редактора...</div>;
@@ -288,7 +291,7 @@ function TipTapEditor({
           background: "#fff",
         }}
       >
-        {header}
+        {typeof header === "function" ? header(editor) : header}
         <MenuBar editor={editor} />
       </div>{" "}
       <div
@@ -309,59 +312,12 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [userName, setUserName] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [docxStatus, setDocxStatus] = useState("");
+  const importFileRef = useRef(null);
 
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
   const userColor = getColor(clientId);
-
-  const fileInputRef = useRef(null);
-  const editorRef = useRef(null);
-
-  const exportDocx = async () => {
-    if (!editorRef.current) return;
-    
-    try {
-      const json = editorRef.current.getJSON();
-      const doc = convertTiptapJsonToDocx(json);
-      const blob = await Packer.toBlob(doc);
-      
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `document-${docId}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Ошибка экспорта:", error);
-      alert("Не удалось экспортировать документ");
-    }
-  };
-  const importDocx = async (event) => {
-    const file = event.target.files[0];
-    if (!file || !editorRef.current) return;
-    
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const { value: html } = await mammoth.convertToHtml({ arrayBuffer });
-
-      const editor = editorRef.current;
-      const { state, view } = editor;
-      const endPos = state.doc.content.size;
-      
-      editor.commands.insertContentAt(endPos, html);
-
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (error) {
-      console.error("Ошибка импорта:", error);
-      alert("Не удалось импортировать документ: " + error.message);
-    }
-  };
-
-  const triggerImport = () => {
-    fileInputRef.current?.click();
-  };
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -401,6 +357,60 @@ function App() {
     window.location.href = "/d/" + newId;
   };
 
+  const handleDocxImport = async (editor, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      window.alert("Выберите файл в формате DOCX.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      window.alert("Размер DOCX-файла не должен превышать 25 МБ.");
+      return;
+    }
+
+    if (!window.confirm("Содержимое DOCX будет добавлено в конец текущего документа у всех участников. Продолжить?")) {
+      return;
+    }
+
+    try {
+      setDocxStatus("Импорт DOCX...");
+      const importedDocument = await importDocx(await file.arrayBuffer());
+
+      // Insert at the document's end instead of setContent(), which replaces
+      // the entire shared document. A single TipTap transaction keeps the
+      // append operation synchronized to every connected Yjs collaborator.
+      const endPosition = editor.state.doc.content.size;
+      const inserted = editor.commands.insertContentAt(
+        endPosition,
+        importedDocument.content,
+        { updateSelection: true },
+      );
+      if (!inserted) {
+        throw new Error("Не удалось добавить содержимое DOCX в документ.");
+      }
+
+      setDocxStatus(`Добавлено в конец документа: ${file.name}`);
+    } catch (error) {
+      console.error("DOCX import failed:", error);
+      setDocxStatus("");
+      window.alert(error instanceof Error ? error.message : "Не удалось импортировать DOCX-файл.");
+    }
+  };
+
+  const handleDocxExport = (editor) => {
+    try {
+      const safeDocId = docId.replace(/[^a-zA-Z0-9._-]/g, "-");
+      downloadDocx(editor.getJSON(), `document-${safeDocId}.docx`);
+      setDocxStatus("DOCX-файл подготовлен к скачиванию");
+    } catch (error) {
+      console.error("DOCX export failed:", error);
+      window.alert(error instanceof Error ? error.message : "Не удалось экспортировать документ в DOCX.");
+    }
+  };
+
   if (showModal) {
     return <NameModal onSubmit={handleNameSubmit} />;
   }
@@ -425,7 +435,7 @@ function App() {
           userName={userName}
           userColor={userColor}
           clientId={clientId}
-          header={
+          header={(editor) => (
             <>
               {/* Верхний бар */}
               <div
@@ -466,6 +476,42 @@ function App() {
                     flexWrap: "wrap",
                   }}
                 >
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    aria-label="Выбрать DOCX-файл для импорта"
+                    style={{ display: "none" }}
+                    onChange={(event) => handleDocxImport(editor, event)}
+                  />
+                  <button
+                    onClick={() => importFileRef.current?.click()}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Импорт DOCX
+                  </button>
+                  <button
+                    onClick={() => handleDocxExport(editor)}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Экспорт DOCX
+                  </button>
                   <button
                     onClick={copyLink}
                     style={{
@@ -496,6 +542,15 @@ function App() {
                   </button>
                 </div>
               </div>
+              {docxStatus && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{ padding: "6px 20px", fontSize: "12px", color: "#555", fontFamily: "monospace" }}
+                >
+                  {docxStatus}
+                </div>
+              )}
 
               {/* Панель участников */}
               <div
@@ -525,7 +580,7 @@ function App() {
                 />
               </div>
             </>
-          }
+          )}
         />
       </div>
     </div>
