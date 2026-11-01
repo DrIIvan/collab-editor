@@ -32,11 +32,27 @@ const PALETTE = [
   "#52B788",
 ];
 
-function getColor(clientId) {
-  const hash = clientId
-    .split("")
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return PALETTE[hash % PALETTE.length];
+const PLACEHOLDER_COLOR = "#adb5bd";
+
+// function getColor(clientId) {
+//   const hash = clientId
+//     .split("")
+//     .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+//   return PALETTE[hash % PALETTE.length];
+// }
+
+function getColor(awareness) {
+  const me = awareness.clientID;
+  const usage = new Map(PALETTE.map((c) => [c, 0]));
+  awareness.getStates().forEach((state, id) => {
+    const c = state.user?.color;
+    if (id !== me && usage.has(c)) usage.set(c, usage.get(c) + 1);
+  });
+  let best = PALETTE[0];
+  for (const c of PALETTE) {
+    if (usage.get(c) < usage.get(best)) best = c;
+  }
+  return best;
 }
 
 // Модалка для ввода имени
@@ -317,7 +333,8 @@ function App() {
 
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
-  const userColor = getColor(clientId);
+  // const userColor = getColor(clientId);
+  const userColor = PLACEHOLDER_COLOR;
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -328,12 +345,55 @@ function App() {
     }
   }, []);
 
+  // useEffect(() => {
+  //   if (userName && !provider) {
+  //     const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
+  //     setProvider(p);
+
+  //     return () => {
+  //       p.destroy();
+  //       yDoc.current.destroy();
+  //     };
+  //   }
+  // }, [userName, docId]);
+
   useEffect(() => {
     if (userName && !provider) {
       const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
+      const awareness = p.awareness;
+
+      // Выбираем цвет, если он ещё не выбран или его занял клиент с меньшим clientID
+      const ensureColor = () => {
+        if (!p.synced) return;
+        const mine = awareness.getLocalState()?.user;
+        if (!mine) return;
+        const me = awareness.clientID;
+        const unassigned = !PALETTE.includes(mine.color);
+        let conflict = false;
+        awareness.getStates().forEach((state, id) => {
+          if (
+            id !== me &&
+            state.user?.color === mine.color &&
+            (unassigned || id < me)
+          ) {
+            conflict = true;
+          }
+        });
+        if (unassigned || conflict) {
+          awareness.setLocalStateField("user", {
+            ...mine,
+            color: getColor(awareness),
+          });
+        }
+      };
+
+      p.on("sync", ensureColor);
+      awareness.on("change", ensureColor);
       setProvider(p);
 
       return () => {
+        awareness.off("change", ensureColor);
+        p.off("sync", ensureColor);
         p.destroy();
         yDoc.current.destroy();
       };
@@ -371,7 +431,11 @@ function App() {
       return;
     }
 
-    if (!window.confirm("Содержимое DOCX будет добавлено в конец текущего документа у всех участников. Продолжить?")) {
+    if (
+      !window.confirm(
+        "Содержимое DOCX будет добавлено в конец текущего документа у всех участников. Продолжить?",
+      )
+    ) {
       return;
     }
 
@@ -396,7 +460,11 @@ function App() {
     } catch (error) {
       console.error("DOCX import failed:", error);
       setDocxStatus("");
-      window.alert(error instanceof Error ? error.message : "Не удалось импортировать DOCX-файл.");
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось импортировать DOCX-файл.",
+      );
     }
   };
 
@@ -407,7 +475,11 @@ function App() {
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
     } catch (error) {
       console.error("DOCX export failed:", error);
-      window.alert(error instanceof Error ? error.message : "Не удалось экспортировать документ в DOCX.");
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось экспортировать документ в DOCX.",
+      );
     }
   };
 
@@ -546,7 +618,12 @@ function App() {
                 <div
                   role="status"
                   aria-live="polite"
-                  style={{ padding: "6px 20px", fontSize: "12px", color: "#555", fontFamily: "monospace" }}
+                  style={{
+                    padding: "6px 20px",
+                    fontSize: "12px",
+                    color: "#555",
+                    fontFamily: "monospace",
+                  }}
                 >
                   {docxStatus}
                 </div>
@@ -576,7 +653,9 @@ function App() {
                 </div>
                 <PresenceBar
                   awareness={provider.awareness}
-                  currentUser={{ clientId }}
+                  currentUser={{
+                    clientId: String(provider.awareness.clientID),
+                  }}
                 />
               </div>
             </>
