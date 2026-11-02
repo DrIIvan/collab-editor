@@ -134,7 +134,7 @@ function NameModal({ onSubmit }) {
 }
 
 // Список участников
-function PresenceBar({ awareness, currentUser }) {
+function PresenceBar({ awareness, userName, onChangeName }) {
   const [states, setStates] = useState([]);
 
   useEffect(() => {
@@ -170,8 +170,7 @@ function PresenceBar({ awareness, currentUser }) {
             alignItems: "center",
             gap: "6px",
             padding: "4px 8px",
-            background:
-              clientId === currentUser.clientId ? "#f0f0f0" : "transparent",
+            background: user.name === userName ? "#f0f0f0" : "transparent",
             border: "1px solid #000",
             fontSize: "13px",
             fontFamily: "monospace",
@@ -186,6 +185,27 @@ function PresenceBar({ awareness, currentUser }) {
             }}
           />
           <span>{user.name}</span>
+
+          {/* Кнопка смены имени — только для текущего пользователя */}
+          {user.name === userName && (
+            <button
+              onClick={onChangeName}
+              title="Сменить имя"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "14px",
+                padding: "0 4px",
+                marginLeft: "4px",
+                opacity: 0.6,
+              }}
+              onMouseOver={(e) => (e.target.style.opacity = 1)}
+              onMouseOut={(e) => (e.target.style.opacity = 0.6)}
+            >
+              ✏️
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -338,9 +358,13 @@ function App() {
   }, [userName, docId]);
 
   const handleNameSubmit = (name) => {
-    localStorage.setItem("userName", name);
-    setUserName(name);
-    setShowModal(false);
+  localStorage.setItem("userName", name);
+  window.location.reload(); // Перезагружаем страницу для корректной инициализации
+};
+
+  const handleChangeName = () => {
+    localStorage.removeItem("userName");
+    setShowModal(true);
   };
 
   const copyLink = () => {
@@ -474,7 +498,8 @@ function App() {
                 </div>
                 <PresenceBar
                   awareness={provider.awareness}
-                  currentUser={{ clientId }}
+                  userName={userName}
+                  onChangeName={handleChangeName}
                 />
               </div>
             </>
