@@ -370,7 +370,7 @@ function App() {
     if (yMetadata.current.get('name')) {
       setDocName(yMetadata.current.get('name'));
     } else {
-      setDocName(`Документ ${docId.slice(0, 4)}`);
+      setDocName(`Документ ${docId}`);
     }
 
     return () => yMetadata.current.unobserve(updateName);
@@ -575,14 +575,14 @@ function App() {
                             yMetadata.current.set('name', trimmed);
                           } else {
                             // Если стерли всё в ноль, возвращаем дефолтное имя
-                            setDocName(yMetadata.current.get('name') || `Документ ${docId.slice(0, 4)}`);
+                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
                           }
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') e.target.blur();
                           if (e.key === 'Escape') {
                             setIsEditingName(false);
-                            setDocName(yMetadata.current.get('name') || `Документ ${docId.slice(0, 4)}`);
+                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
                           }
                         }}
                         style={{
