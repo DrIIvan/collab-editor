@@ -4,8 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 // Редактор одной секции (один Y.XmlFragment)
 export default function SectionEditor(props) {
 
-      const { onFocus} = props;
-      const { onDestroy } = props;
+      const { onFocus, onDestroy } = props;
 
   // Гарантируем, что во фрагменте есть хотя бы один пустой параграф
   useEffect(() => {
