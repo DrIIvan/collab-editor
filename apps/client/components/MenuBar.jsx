@@ -18,20 +18,21 @@ const btn = (active, disabled) => ({
   opacity: disabled ? 0.3 : 1,
 });
 
-function Button({ onClick, active, disabled, title, children }) {
+function Button(props) {
+   const { onClick } = props;
   return (
     <button
       type="button"
       className="mb-btn"
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
+      title={props.title}
+      aria-label={props.title}
+      aria-pressed={props.active}
       onClick={onClick}
-      disabled={disabled}
+      disabled={props.disabled}
       onMouseDown={(e) => e.preventDefault()}
-      style={btn(active, disabled)}
+      style={btn(props.active, props.disabled)}
     >
-      {children}
+      {props.children}
     </button>
   );
 }
