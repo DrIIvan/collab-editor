@@ -611,7 +611,7 @@ function App() {
                           lineHeight: "1.2",
                         }}
                       >
-                        {docName || `Документ ${docId.slice(0, 4)}`}
+                        {docName || `Документ ${docId}`}
                       </h1>
                     )}
                     <SaveIndicator provider={provider} />
