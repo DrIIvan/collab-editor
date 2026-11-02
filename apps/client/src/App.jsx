@@ -1,9 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 // import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
+import {
+  prosemirrorJSONToYXmlFragment,
+  yXmlFragmentToProsemirrorJSON,
+} from "@tiptap/y-tiptap";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
@@ -34,12 +39,11 @@ const PALETTE = [
 
 const PLACEHOLDER_COLOR = "#adb5bd";
 
-// function getColor(clientId) {
-//   const hash = clientId
-//     .split("")
-//     .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-//   return PALETTE[hash % PALETTE.length];
-// }
+// Схема должна совпадать с набором расширений в редакторе (без Collaboration*)
+const schema = getSchema([StarterKit.configure({ undoRedo: false })]);
+
+const SECTION_SIZE = 30; // блоков в одной секции
+const newSectionId = () => "s_" + Math.random().toString(36).slice(2, 10);
 
 function getColor(awareness) {
   const me = awareness.clientID;
@@ -277,46 +281,101 @@ function SaveIndicator({ provider }) {
   );
 }
 
-// Редактор
+// Редактор одной секции (один Y.XmlFragment)
+function SectionEditor({
+  id,
+  eager,
+  yDoc,
+  provider,
+  userName,
+  userColor,
+  onFocus,
+  onDestroy,
+}) {
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({ undoRedo: false }),
+        Collaboration.configure({ document: yDoc, field: id }),
+        CollaborationCaret.configure({
+          provider,
+          // берём уже выбранный цвет, чтобы новая секция его не сбрасывала
+          user: provider.awareness.getLocalState()?.user ?? {
+            name: userName,
+            color: userColor,
+          },
+        }),
+      ],
+      // первая секция сразу становится активной, чтобы MenuBar был доступен
+      onCreate: ({ editor }) => {
+        if (eager) onFocus(editor);
+      },
+      onFocus: ({ editor }) => onFocus(editor),
+      editorProps: {
+        attributes: {
+          style:
+            "outline: none; padding: 0 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4;",
+        },
+      },
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    if (!editor) return;
+    return () => onDestroy(editor);
+  }, [editor]);
+
+  return <EditorContent editor={editor} />;
+}
+
+// Секция монтирует редактор, только когда она рядом с экраном
+function LazySection(props) {
+  const ref = useRef(null);
+  const heightRef = useRef(400);
+  const [visible, setVisible] = useState(props.eager === true);
+
+  // показываем редактор, когда секция рядом с экраном (запас 800px)
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      ([e]) => setVisible(e.isIntersecting),
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, []);
+
+  // запоминаем высоту, чтобы скролл не прыгал, когда секция выгружается
+  useEffect(() => {
+    if (!visible) return;
+    const ro = new ResizeObserver(() => {
+      heightRef.current = ref.current.offsetHeight;
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [visible]);
+
+  return (
+    <div
+      ref={ref}
+      style={{ minHeight: visible ? undefined : heightRef.current }}
+    >
+      {visible && <SectionEditor {...props} />}
+    </div>
+  );
+}
+
+// Контейнер секций
 function TipTapEditor({
   provider,
   yDoc,
   userName,
   userColor,
-  clientId,
   header,
+  sectionIds,
 }) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        undoRedo: false,
-      }),
-      Collaboration.configure({ document: yDoc }),
-      CollaborationCaret.configure({
-        provider,
-        user: { name: userName, color: userColor },
-      }),
-    ],
-    editorProps: {
-      attributes: {
-        style:
-          "outline: none; min-height: 500px; padding: 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4;",
-      },
-    },
-  });
+  const [activeEditor, setActiveEditor] = useState(null);
 
-  //   useEffect(() => {
-  //     if (editor && provider) {
-  //       provider.awareness.setLocalStateField("user", {
-  //         name: userName,
-  //         color: userColor,
-  //       });
-  //     }
-  //   }, [editor, provider, userName, userColor]);
-
-  if (!editor) {
-    return <div style={{ padding: "20px" }}>Загрузка редактора...</div>;
-  }
   return (
     <>
       <div
@@ -327,9 +386,9 @@ function TipTapEditor({
           background: "#fff",
         }}
       >
-        {typeof header === "function" ? header(editor) : header}
-        <MenuBar editor={editor} />
-      </div>{" "}
+        {typeof header === "function" ? header(activeEditor) : header}
+        {activeEditor && <MenuBar editor={activeEditor} />}
+      </div>
       <div
         style={{
           maxWidth: "800px",
@@ -337,7 +396,19 @@ function TipTapEditor({
           padding: "20px",
         }}
       >
-        <EditorContent editor={editor} />
+        {sectionIds.map((id, i) => (
+          <LazySection
+            key={id}
+            id={id}
+            eager={i === 0}
+            yDoc={yDoc}
+            provider={provider}
+            userName={userName}
+            userColor={userColor}
+            onFocus={setActiveEditor}
+            onDestroy={(ed) => setActiveEditor((a) => (a === ed ? null : a))}
+          />
+        ))}
       </div>
     </>
   );
@@ -345,7 +416,9 @@ function TipTapEditor({
 
 function App() {
   const yDoc = useRef(new Y.Doc());
-  const yMetadata = useRef(yDoc.current.getMap('metadata'));
+  const yMetadata = useRef(yDoc.current.getMap("metadata"));
+  const ySections = useRef(yDoc.current.getArray("sectionIds")).current;
+  const [sectionIds, setSectionIds] = useState(["default"]);
   const [provider, setProvider] = useState(null);
   const [userName, setUserName] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -367,28 +440,27 @@ function App() {
     }
   }, []);
 
-  // useEffect(() => {
-  //   if (userName && !provider) {
-  //     const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
-  //     setProvider(p);
-
-  //     return () => {
-  //       p.destroy();
-  //       yDoc.current.destroy();
-  //     };
-  //   }
-  // }, [userName, docId]);
+  // Список секций документа (общий для всех участников)
+  useEffect(() => {
+    const update = () => {
+      const ids = ySections.toArray();
+      setSectionIds(ids.length ? ids : ["default"]);
+    };
+    update();
+    ySections.observe(update);
+    return () => ySections.unobserve(update);
+  }, []);
 
   useEffect(() => {
     const updateName = () => {
-      const name = yMetadata.current.get('name');
+      const name = yMetadata.current.get("name");
       if (name) setDocName(name);
     };
 
     yMetadata.current.observe(updateName);
 
-    if (yMetadata.current.get('name')) {
-      setDocName(yMetadata.current.get('name'));
+    if (yMetadata.current.get("name")) {
+      setDocName(yMetadata.current.get("name"));
     } else {
       setDocName(`Документ ${docId}`);
     }
@@ -444,9 +516,9 @@ function App() {
   }, [userName, docId]);
 
   const handleNameSubmit = (name) => {
-  localStorage.setItem("userName", name);
-  window.location.reload(); // Перезагружаем страницу для корректной инициализации
-};
+    localStorage.setItem("userName", name);
+    window.location.reload(); // Перезагружаем страницу для корректной инициализации
+  };
 
   const handleChangeName = () => {
     localStorage.removeItem("userName");
@@ -464,7 +536,7 @@ function App() {
     window.location.href = "/d/" + newId;
   };
 
-  const handleDocxImport = async (editor, event) => {
+  const handleDocxImport = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = "";
@@ -490,17 +562,30 @@ function App() {
       setDocxStatus("Импорт DOCX...");
       const importedDocument = await importDocx(await file.arrayBuffer());
 
-      // Insert at the document's end instead of setContent(), which replaces
-      // the entire shared document. A single TipTap transaction keeps the
-      // append operation synchronized to every connected Yjs collaborator.
-      const endPosition = editor.state.doc.content.size;
-      const inserted = editor.commands.insertContentAt(
-        endPosition,
-        importedDocument.content,
-        { updateSelection: true },
-      );
-      if (!inserted) {
-        throw new Error("Не удалось добавить содержимое DOCX в документ.");
+      const nodes = Array.isArray(importedDocument.content)
+        ? importedDocument.content
+        : (importedDocument.content?.content ?? []);
+
+      const doc = yDoc.current;
+      // сохраняем старое содержимое (фрагмент "default") как первую секцию
+      if (ySections.length === 0) ySections.push(["default"]);
+
+      for (let i = 0; i < nodes.length; i += SECTION_SIZE) {
+        const id = newSectionId();
+        doc.transact(() => {
+          // пишем напрямую в Yjs, без создания редактора
+          prosemirrorJSONToYXmlFragment(
+            schema,
+            { type: "doc", content: nodes.slice(i, i + SECTION_SIZE) },
+            doc.getXmlFragment(id),
+          );
+          ySections.push([id]);
+        });
+        setDocxStatus(
+          `Импорт DOCX: ${Math.min(i + SECTION_SIZE, nodes.length)} / ${nodes.length}`,
+        );
+        // отдаём управление браузеру, чтобы отрисовался интерфейс и ушёл апдейт в сеть
+        await new Promise((r) => setTimeout(r, 30));
       }
 
       setDocxStatus(`Добавлено в конец документа: ${file.name}`);
@@ -515,11 +600,20 @@ function App() {
     }
   };
 
-  const handleDocxExport = (editor) => {
+  const handleDocxExport = () => {
     try {
-      const name = yMetadata.current.get('name') || docName || docId;
+      const name = yMetadata.current.get("name") || docName || docId;
       const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
-      downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
+      // собираем все секции напрямую из Yjs, без монтирования редакторов
+      const fullDoc = {
+        type: "doc",
+        content: sectionIds.flatMap(
+          (id) =>
+            yXmlFragmentToProsemirrorJSON(yDoc.current.getXmlFragment(id))
+              .content ?? [],
+        ),
+      };
+      downloadDocx(fullDoc, `${safeDocName}.docx`);
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
     } catch (error) {
       console.error("DOCX export failed:", error);
@@ -555,7 +649,8 @@ function App() {
           userName={userName}
           userColor={userColor}
           clientId={clientId}
-          header={(editor) => (
+          sectionIds={sectionIds}
+          header={() => (
             <>
               {/* Верхний бар */}
               <div
@@ -596,17 +691,23 @@ function App() {
                           const trimmed = docName.trim();
                           if (trimmed) {
                             // Сохраняем в общую карту Yjs (синхронизируется со всеми)
-                            yMetadata.current.set('name', trimmed);
+                            yMetadata.current.set("name", trimmed);
                           } else {
                             // Если стерли всё в ноль, возвращаем дефолтное имя
-                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
+                            setDocName(
+                              yMetadata.current.get("name") ||
+                                `Документ ${docId}`,
+                            );
                           }
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.target.blur();
-                          if (e.key === 'Escape') {
+                          if (e.key === "Enter") e.target.blur();
+                          if (e.key === "Escape") {
                             setIsEditingName(false);
-                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
+                            setDocName(
+                              yMetadata.current.get("name") ||
+                                `Документ ${docId}`,
+                            );
                           }
                         }}
                         style={{
@@ -655,7 +756,7 @@ function App() {
                     accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     aria-label="Выбрать DOCX-файл для импорта"
                     style={{ display: "none" }}
-                    onChange={(event) => handleDocxImport(editor, event)}
+                    onChange={handleDocxImport}
                   />
                   <button
                     onClick={() => importFileRef.current?.click()}
@@ -672,7 +773,7 @@ function App() {
                     Импорт DOCX
                   </button>
                   <button
-                    onClick={() => handleDocxExport(editor)}
+                    onClick={handleDocxExport}
                     style={{
                       padding: "8px 16px",
                       fontSize: "14px",
