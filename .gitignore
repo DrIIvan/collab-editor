@@ -10,3 +10,4 @@ apps/server/yjs-data/
 npm-debug.log*
 playwright-report/
 test-results/
+/.idea
