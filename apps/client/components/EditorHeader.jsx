@@ -22,7 +22,7 @@ export default function EditorHeader(props) {
 
   const handleDocxExport = (editor) => {
     try {
-      const name = yMetadata.current.get("name") || docName || docId;
+      const name = props.yMetadata.current.get("name") || props.docName || props.docId;
       const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
       downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
