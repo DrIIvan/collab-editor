@@ -277,7 +277,101 @@ function SaveIndicator({ provider }) {
   );
 }
 
-// Редактор
+// Редактор одной секции (один Y.XmlFragment)
+function SectionEditor({
+  id,
+  eager,
+  yDoc,
+  provider,
+  userName,
+  userColor,
+  onFocus,
+  onDestroy,
+}) {
+  // Гарантируем, что во фрагменте есть хотя бы один пустой параграф
+  useEffect(() => {
+    const fragment = yDoc.getXmlFragment(id);
+    if (fragment.length === 0) {
+      yDoc.transact(() => {
+        const p = new Y.XmlElement("paragraph");
+        fragment.insert(0, [p]);
+      });
+    }
+  }, [id, yDoc]);
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({ undoRedo: false }),
+        Collaboration.configure({ document: yDoc, field: id }),
+        CollaborationCaret.configure({
+          provider,
+          user: provider.awareness.getLocalState()?.user ?? {
+            name: userName,
+            color: userColor,
+          },
+        }),
+      ],
+      onCreate: ({ editor }) => {
+        if (eager) onFocus(editor);
+      },
+      onFocus: ({ editor }) => onFocus(editor),
+      editorProps: {
+        attributes: {
+          style:
+            "outline: none; padding: 12px 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4; min-height: 120px; cursor: text;",
+        },
+      },
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    if (!editor) return;
+    return () => onDestroy(editor);
+  }, [editor]);
+
+  return <EditorContent editor={editor} />;
+}
+
+
+// Секция монтирует редактор, только когда она рядом с экраном
+function LazySection(props) {
+  const ref = useRef(null);
+  const heightRef = useRef(400);
+  const [visible, setVisible] = useState(props.eager === true);
+
+  // показываем редактор, когда секция рядом с экраном (запас 800px)
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      ([e]) => setVisible(e.isIntersecting),
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, []);
+
+  // запоминаем высоту, чтобы скролл не прыгал, когда секция выгружается
+  useEffect(() => {
+    if (!visible) return;
+    const ro = new ResizeObserver(() => {
+      heightRef.current = ref.current.offsetHeight;
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [visible]);
+
+  return (
+    <div
+      ref={ref}
+      style={{ minHeight: visible ? undefined : heightRef.current }}
+    >
+      {visible && <SectionEditor {...props} />}
+    </div>
+  );
+}
+
+// Контейнер секций
 function TipTapEditor({
   provider,
   yDoc,
