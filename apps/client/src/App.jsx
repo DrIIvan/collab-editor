@@ -292,6 +292,17 @@ function SectionEditor({
   onFocus,
   onDestroy,
 }) {
+  // Гарантируем, что во фрагменте есть хотя бы один пустой параграф
+  useEffect(() => {
+    const fragment = yDoc.getXmlFragment(id);
+    if (fragment.length === 0) {
+      yDoc.transact(() => {
+        const p = new Y.XmlElement("paragraph");
+        fragment.insert(0, [p]);
+      });
+    }
+  }, [id, yDoc]);
+
   const editor = useEditor(
     {
       extensions: [
@@ -299,14 +310,12 @@ function SectionEditor({
         Collaboration.configure({ document: yDoc, field: id }),
         CollaborationCaret.configure({
           provider,
-          // берём уже выбранный цвет, чтобы новая секция его не сбрасывала
           user: provider.awareness.getLocalState()?.user ?? {
             name: userName,
             color: userColor,
           },
         }),
       ],
-      // первая секция сразу становится активной, чтобы MenuBar был доступен
       onCreate: ({ editor }) => {
         if (eager) onFocus(editor);
       },
@@ -314,7 +323,7 @@ function SectionEditor({
       editorProps: {
         attributes: {
           style:
-            "outline: none; padding: 0 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4;",
+            "outline: none; padding: 12px 20px; font-family: Georgia, 'Noto Color Emoji', serif; font-size: 16px; line-height: 1.4; min-height: 120px; cursor: text;",
         },
       },
     },
@@ -328,6 +337,7 @@ function SectionEditor({
 
   return <EditorContent editor={editor} />;
 }
+
 
 // Секция монтирует редактор, только когда она рядом с экраном
 function LazySection(props) {
