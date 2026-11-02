@@ -11,7 +11,7 @@ export default function EditorHeader(props) {
   const importFileRef = useRef(null);
 
   const copyLink = () => {
-    const url = window.location.origin + "/d/" + docId;
+    const url = window.location.origin + "/d/" + props.docId;
     navigator.clipboard.writeText(url);
     alert("Ссылка скопирована!");
   };
