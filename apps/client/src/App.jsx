@@ -325,15 +325,17 @@ function TipTapEditor({
 
 function App() {
   const yDoc = useRef(new Y.Doc());
+  const yMetadata = useRef(yDoc.current.getMap('metadata'));
   const [provider, setProvider] = useState(null);
   const [userName, setUserName] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [docxStatus, setDocxStatus] = useState("");
   const importFileRef = useRef(null);
+  const [docName, setDocName] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
 
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
-  // const userColor = getColor(clientId);
   const userColor = PLACEHOLDER_COLOR;
 
   useEffect(() => {
@@ -356,6 +358,27 @@ function App() {
   //     };
   //   }
   // }, [userName, docId]);
+
+  useEffect(() => {
+    const updateName = () => {
+      const name = yMetadata.current.get('name');
+      if (name) setDocName(name);
+    };
+
+    yMetadata.current.observe(updateName);
+
+    if (yMetadata.current.get('name')) {
+      setDocName(yMetadata.current.get('name'));
+    } else {
+      setDocName(`Документ ${docId}`);
+    }
+
+    return () => yMetadata.current.unobserve(updateName);
+  }, [docId]);
+
+  useEffect(() => {
+    document.title = docName ? `${docName} — Collab Editor` : "Collab Editor";
+  }, [docName]);
 
   useEffect(() => {
     if (userName && !provider) {
@@ -470,8 +493,9 @@ function App() {
 
   const handleDocxExport = (editor) => {
     try {
-      const safeDocId = docId.replace(/[^a-zA-Z0-9._-]/g, "-");
-      downloadDocx(editor.getJSON(), `document-${safeDocId}.docx`);
+      const name = yMetadata.current.get('name') || docName || docId;
+      const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
+      downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
     } catch (error) {
       console.error("DOCX export failed:", error);
@@ -528,17 +552,70 @@ function App() {
                     gap: "16px",
                   }}
                 >
-                  <h1
+                  <div
                     style={{
-                      fontSize: "16px",
-                      fontWeight: 600,
-                      fontFamily: "monospace",
-                      margin: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "16px",
+                      flex: 1,
+                      minWidth: "200px",
                     }}
                   >
-                    Doc: {docId}
-                  </h1>
-                  <SaveIndicator provider={provider} />
+                    {isEditingName ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={docName}
+                        onChange={(e) => setDocName(e.target.value)}
+                        onBlur={() => {
+                          setIsEditingName(false);
+                          const trimmed = docName.trim();
+                          if (trimmed) {
+                            // Сохраняем в общую карту Yjs (синхронизируется со всеми)
+                            yMetadata.current.set('name', trimmed);
+                          } else {
+                            // Если стерли всё в ноль, возвращаем дефолтное имя
+                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.target.blur();
+                          if (e.key === 'Escape') {
+                            setIsEditingName(false);
+                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
+                          }
+                        }}
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 600,
+                          fontFamily: "monospace",
+                          padding: "4px 8px",
+                          border: "1px solid #000",
+                          outline: "none",
+                          background: "#fff",
+                          maxWidth: "300px",
+                          width: "100%",
+                        }}
+                      />
+                    ) : (
+                      <h1
+                        onClick={() => setIsEditingName(true)}
+                        title="Нажмите, чтобы переименовать"
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 600,
+                          fontFamily: "monospace",
+                          margin: 0,
+                          cursor: "pointer",
+                          borderBottom: "1px dashed #999",
+                          lineHeight: "1.2",
+                        }}
+                      >
+                        {docName || `Документ ${docId}`}
+                      </h1>
+                    )}
+                    <SaveIndicator provider={provider} />
+                  </div>
                 </div>
 
                 <div
