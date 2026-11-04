@@ -43,15 +43,7 @@ function Group({ children }) {
 
 function Divider() {
   return (
-    <div
-      style={{
-        width: "1px",
-        height: "20px",
-        background: "#000",
-        opacity: 0.25,
-        margin: "0 8px",
-        flexShrink: 0,
-      }}
+    <div className="w-px h-5 bg-gray-500 mx-2"
     />
   );
 }

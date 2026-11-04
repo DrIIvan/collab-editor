@@ -90,35 +90,14 @@ export default function EditorHeader(props) {
   return (
     <>
       {/* Верхний бар */}
-      <div
-        style={{
-          borderBottom: "1px solid #000",
-          padding: "12px 20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "16px",
-              flex: 1,
-              minWidth: "200px",
-            }}
+      <div className="border-b py-3 px-5 flex flex-wrap gap-3 justify-between items-center">
+        <div className="flex items-center gap-4">
+          <div className="flex flex-1 min-w-50 items-center gap-4 "
+
           >
             {isEditingName ? (
-              <input
+              <input className="max-w-75 bg-mauve-100 outline-0 w-full border font-semibold font-mono py-1 px-2"
+
                 type="text"
                 autoFocus
                 value={props.docName}
@@ -147,32 +126,13 @@ export default function EditorHeader(props) {
                     );
                   }
                 }}
-                style={{
-                  fontSize: "16px",
-                  fontWeight: 600,
-                  fontFamily: "monospace",
-                  padding: "4px 8px",
-                  border: "1px solid #000",
-                  outline: "none",
-                  background: "#fff",
-                  maxWidth: "300px",
-                  width: "100%",
-                }}
+
               />
             ) : (
               <h1
                 onClick={() => setIsEditingName(true)}
                 title="Нажмите, чтобы переименовать"
-                style={{
-                  fontSize: "16px",
-                  fontWeight: 600,
-                  fontFamily: "monospace",
-                  margin: 0,
-                  cursor: "pointer",
-                  borderBottom: "1px dashed #999",
-                  lineHeight: "1.2",
-                }}
-              >
+                className="text-[16px] m-0  cursor-pointer leading-[1.2]  font-semibold font-mono border-b border-dashed hover:border-solid  border-gray-500">
                 {props.docName || `Документ ${props.docId}`}
               </h1>
             )}
@@ -180,19 +140,14 @@ export default function EditorHeader(props) {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-          }}
+        <div className="flex flex-wrap gap-2"
         >
           <input
             ref={importFileRef}
             type="file"
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             aria-label="Выбрать DOCX-файл для импорта"
-            style={{ display: "none" }}
+            className="hidden"
             onChange={(event) => handleDocxImport(props.editor, event)}
           />
           <button

@@ -7,7 +7,6 @@ import React, { useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
-import MenuBar from "../components/MenuBar";
 import EditorHeader from "../components/EditorHeader";
 import NameModal from "../components/NameModal";
 import TipTapEditor from "../components/TipTapEditor";
@@ -206,7 +205,7 @@ function App() {
   }
 
   if (!provider) {
-    return <div style={{ padding: "20px" }}>Подключение к серверу...</div>;
+    return <div className="p-5">Подключение к серверу...</div>;
   }
 
   return (
