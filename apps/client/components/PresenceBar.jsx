@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 // Список участников
 export default function PresenceBar(props) {
   const [states, setStates] = useState([]);
+  const myClientId = props.awareness.clientID;
 
   useEffect(() => {
     const update = () => {
@@ -12,6 +13,7 @@ export default function PresenceBar(props) {
           user: state.user,
         }))
         .filter((s) => s.user?.name);
+
       setStates(allStates);
     };
 
