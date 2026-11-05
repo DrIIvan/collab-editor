@@ -15,12 +15,13 @@ import SectionEditor from "../components/SectionEditor";
 
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
 
-// ↓ это если запускаешь через npm run dev
-const SERVER_URL = "ws://localhost:1234";
-// ↓ это если запускаешь через докер
-// const SERVER_URL =
-//   import.meta.env.VITE_WS_URL ||
-//   `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+// In development the WebSocket server runs separately. In Docker/production,
+// Nginx proxies /ws to the same-origin collaboration server.
+const SERVER_URL =
+  import.meta.env.VITE_WS_URL ||
+  (import.meta.env.DEV
+    ? "ws://localhost:1234"
+    : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
 
 const PALETTE = [
   "#FF6B6B",
@@ -47,14 +48,20 @@ const PLACEHOLDER_COLOR = "#adb5bd";
 function getColor(awareness) {
   const me = awareness.clientID;
   const usage = new Map(PALETTE.map((c) => [c, 0]));
+
   awareness.getStates().forEach((state, id) => {
     const c = state.user?.color;
-    if (id !== me && usage.has(c)) usage.set(c, usage.get(c) + 1);
+    if (id !== me && usage.has(c)) {
+      usage.set(c, usage.get(c) + 1);
+    }
   });
+
   let best = PALETTE[0];
+
   for (const c of PALETTE) {
     if (usage.get(c) < usage.get(best)) best = c;
   }
+
   return best;
 }
 
@@ -66,20 +73,28 @@ function LazySection(props) {
 
   // показываем редактор, когда секция рядом с экраном (запас 800px)
   useEffect(() => {
-    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), {
-      rootMargin: "800px 0px",
-    });
+    const io = new IntersectionObserver(
+      ([e]) => setVisible(e.isIntersecting),
+      {
+        rootMargin: "800px 0px",
+      },
+    );
+
     io.observe(ref.current);
+
     return () => io.disconnect();
   }, []);
 
   // запоминаем высоту, чтобы скролл не прыгал, когда секция выгружается
   useEffect(() => {
     if (!visible) return;
+
     const ro = new ResizeObserver(() => {
       heightRef.current = ref.current.offsetHeight;
     });
+
     ro.observe(ref.current);
+
     return () => ro.disconnect();
   }, [visible]);
 
@@ -93,14 +108,16 @@ function LazySection(props) {
   );
 }
 
-
 function App() {
   const yDoc = useRef(new Y.Doc());
   const yMetadata = useRef(yDoc.current.getMap("metadata"));
+
   const [provider, setProvider] = useState(null);
   const [userName, setUserName] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [docName, setDocName] = useState("");
+  const [documentStatus, setDocumentStatus] = useState("checking");
+  const [isRecreating, setIsRecreating] = useState(false);
 
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
@@ -108,6 +125,7 @@ function App() {
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
+
     if (savedName) {
       setUserName(savedName);
     } else {
@@ -115,11 +133,48 @@ function App() {
     }
   }, []);
 
+  // A deleted document must not be recreated when someone opens an old link.
+  useEffect(() => {
+    if (!userName) return undefined;
+
+    let cancelled = false;
+
+    const checkDocument = async () => {
+      try {
+        const response = await fetch(
+          `/api/documents/${encodeURIComponent(docId)}`,
+        );
+
+        if (!response.ok) {
+          throw new Error("Не удалось проверить доступность документа.");
+        }
+
+        const result = await response.json();
+
+        if (!cancelled) {
+          setDocumentStatus(result.deleted ? "deleted" : "available");
+        }
+      } catch (error) {
+        console.error("Document status check failed:", error);
+
+        if (!cancelled) {
+          setDocumentStatus("error");
+        }
+      }
+    };
+
+    checkDocument();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [docId, userName]);
+
   // useEffect(() => {
   //   if (userName && !provider) {
   //     const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
   //     setProvider(p);
-
+  //
   //     return () => {
   //       p.destroy();
   //       yDoc.current.destroy();
@@ -128,39 +183,46 @@ function App() {
   // }, [userName, docId]);
 
   useEffect(() => {
-    const updateName = () => {
-      const name = yMetadata.current.get("name");
-      if (name) setDocName(name);
-    };
-
-    yMetadata.current.observe(updateName);
-
-    if (yMetadata.current.get("name")) {
-      setDocName(yMetadata.current.get("name"));
-    } else {
-      setDocName(`Документ ${docId}`);
-    }
-
-    return () => yMetadata.current.unobserve(updateName);
-  }, [docId]);
-
-  useEffect(() => {
-    document.title = docName ? `${docName} — Collab Editor` : "Collab Editor";
-  }, [docName]);
-
-  useEffect(() => {
-    if (userName && !provider) {
+    if (userName && documentStatus === "available" && !provider) {
       const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
       const awareness = p.awareness;
+
+      // Other collaborators are also moved out of the editor when the server
+      // closes a room after deletion.
+      const handleProviderStatus = async ({ status }) => {
+        if (status !== "disconnected") return;
+
+        try {
+          const response = await fetch(
+            `/api/documents/${encodeURIComponent(docId)}`,
+          );
+
+          if (!response.ok) return;
+
+          const result = await response.json();
+
+          if (result.deleted) {
+            setDocumentStatus("deleted");
+          }
+        } catch (error) {
+          console.error("Unable to refresh document status:", error);
+        }
+      };
+
+      p.on("status", handleProviderStatus);
 
       // Выбираем цвет, если он ещё не выбран или его занял клиент с меньшим clientID
       const ensureColor = () => {
         if (!p.synced) return;
+
         const mine = awareness.getLocalState()?.user;
         if (!mine) return;
+
         const me = awareness.clientID;
         const unassigned = !PALETTE.includes(mine.color);
+
         let conflict = false;
+
         awareness.getStates().forEach((state, id) => {
           if (
             id !== me &&
@@ -170,6 +232,7 @@ function App() {
             conflict = true;
           }
         });
+
         if (unassigned || conflict) {
           awareness.setLocalStateField("user", {
             ...mine,
@@ -180,16 +243,59 @@ function App() {
 
       p.on("sync", ensureColor);
       awareness.on("change", ensureColor);
+
       setProvider(p);
 
       return () => {
         awareness.off("change", ensureColor);
         p.off("sync", ensureColor);
+        p.off("status", handleProviderStatus);
         p.destroy();
         yDoc.current.destroy();
       };
     }
-  }, [userName, docId]);
+  }, [userName, docId, documentStatus]);
+
+  // Повторное создание пустого документа с прежним ID
+  const handleRecreateDocument = async () => {
+    const confirmed = window.confirm(
+      "Создать новый пустой документ с тем же адресом? Все, у кого есть эта ссылка, снова получат доступ к новому документу. Старое содержимое восстановить нельзя.",
+    );
+
+    if (!confirmed) return;
+
+    setIsRecreating(true);
+
+    try {
+      const response = await fetch(
+        `/api/documents/${encodeURIComponent(docId)}`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+
+        throw new Error(
+          result.error || "Не удалось создать новый документ.",
+        );
+      }
+
+      // Reload to initialize a brand-new Y.Doc and provider for the reused ID.
+      window.location.reload();
+    } catch (error) {
+      console.error("Document recreation failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось создать новый документ.",
+      );
+
+      setIsRecreating(false);
+    }
+  };
 
   const handleNameSubmit = (name) => {
     localStorage.setItem("userName", name);
@@ -205,8 +311,112 @@ function App() {
     return <NameModal onSubmit={handleNameSubmit} />;
   }
 
+  // Экран удалённого документа
+  if (documentStatus === "deleted") {
+    return (
+      <div
+        style={{
+          padding: "48px 24px",
+          maxWidth: "560px",
+          margin: "0 auto",
+          fontFamily: "monospace",
+        }}
+      >
+        <h1 style={{ fontSize: "22px" }}>Документ удалён</h1>
+
+        <p style={{ color: "#666", lineHeight: 1.6 }}>
+          Этот документ удалён. Его прежнее содержимое восстановить нельзя,
+          но можно создать новый пустой документ по этому же адресу.
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "8px",
+          }}
+        >
+          <button
+            onClick={handleRecreateDocument}
+            disabled={isRecreating}
+            style={{
+              padding: "10px 16px",
+              background: "#000",
+              color: "#fff",
+              border: "none",
+              cursor: isRecreating ? "wait" : "pointer",
+              opacity: isRecreating ? 0.6 : 1,
+              fontFamily: "monospace",
+            }}
+          >
+            {isRecreating
+              ? "Создание..."
+              : "Создать новый документ по этой ссылке"}
+          </button>
+
+          <button
+            onClick={() => {
+              const newId = Math.random().toString(36).substring(2, 10);
+              window.location.href = `/d/${newId}`;
+            }}
+            style={{
+              padding: "10px 16px",
+              background: "#fff",
+              color: "#000",
+              border: "1px solid #000",
+              cursor: "pointer",
+              fontFamily: "monospace",
+            }}
+          >
+            Создать документ с новой ссылкой
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (documentStatus === "error") {
+    return (
+      <div
+        style={{
+          padding: "48px 24px",
+          maxWidth: "560px",
+          margin: "0 auto",
+          fontFamily: "monospace",
+        }}
+      >
+        <h1 style={{ fontSize: "22px" }}>Не удалось подключиться</h1>
+
+        <p style={{ color: "#666", lineHeight: 1.6 }}>
+          Не удалось проверить документ. Проверьте соединение и попробуйте ещё
+          раз.
+        </p>
+
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            padding: "10px 16px",
+            background: "#000",
+            color: "#fff",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "monospace",
+          }}
+        >
+          Повторить
+        </button>
+      </div>
+    );
+  }
+
   if (!provider) {
-    return <div style={{ padding: "20px" }}>Подключение к серверу...</div>;
+    return (
+      <div style={{ padding: "20px" }}>
+        {documentStatus === "checking"
+          ? "Проверка документа..."
+          : "Подключение к серверу..."}
+      </div>
+    );
   }
 
   return (
@@ -235,6 +445,7 @@ function App() {
               yMetadata={yMetadata}
               userName={userName}
               handleChangeName={handleChangeName}
+              onDocumentDeleted={() => setDocumentStatus("deleted")}
             />
           )}
         />

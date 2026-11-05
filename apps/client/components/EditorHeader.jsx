@@ -6,6 +6,7 @@ import SaveIndicator from "./SaveIndicator";
 export default function EditorHeader(props) {
   const { setDocName, handleChangeName } = props;
   const [docxStatus, setDocxStatus] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const importFileRef = useRef(null);
@@ -15,19 +16,68 @@ export default function EditorHeader(props) {
     navigator.clipboard.writeText(url);
     alert("Ссылка скопирована!");
   };
+
   const createNewDoc = () => {
     const newId = Math.random().toString(36).substring(2, 10);
     window.location.href = "/d/" + newId;
   };
 
+  // Удаление документа
+  const deleteDocument = async () => {
+    const documentName = props.docName || `Документ ${props.docId}`;
+
+    const confirmed = window.confirm(
+      `Удалить «${documentName}»?
+
+Содержимое будет удалено без возможности восстановления, а все участники потеряют доступ по этой ссылке.`,
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(
+        `/api/documents/${encodeURIComponent(props.docId)}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Не удалось удалить документ.");
+      }
+
+      props.onDocumentDeleted?.();
+    } catch (error) {
+      console.error("Document deletion failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось удалить документ.",
+      );
+
+      setIsDeleting(false);
+    }
+  };
+
   const handleDocxExport = (editor) => {
     try {
-      const name = props.yMetadata.current.get("name") || props.docName || props.docId;
-      const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
+      const name =
+        props.yMetadata.current.get("name") || props.docName || props.docId;
+
+      const safeDocName = name.replace(
+        /[^a-zA-Zа-яА-Я0-9._-]/gi,
+        "-",
+      );
+
       downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
     } catch (error) {
       console.error("DOCX export failed:", error);
+
       window.alert(
         error instanceof Error
           ? error.message
@@ -38,13 +88,16 @@ export default function EditorHeader(props) {
 
   const handleDocxImport = async (editor, event) => {
     const file = event.target.files?.[0];
+
     if (!file) return;
+
     event.target.value = "";
 
     if (!file.name.toLowerCase().endsWith(".docx")) {
       window.alert("Выберите файл в формате DOCX.");
       return;
     }
+
     if (file.size > 25 * 1024 * 1024) {
       window.alert("Размер DOCX-файла не должен превышать 25 МБ.");
       return;
@@ -60,17 +113,24 @@ export default function EditorHeader(props) {
 
     try {
       setDocxStatus("Импорт DOCX...");
-      const importedDocument = await importDocx(await file.arrayBuffer());
+
+      const importedDocument = await importDocx(
+        await file.arrayBuffer(),
+      );
 
       // Insert at the document's end instead of setContent(), which replaces
       // the entire shared document. A single TipTap transaction keeps the
       // append operation synchronized to every connected Yjs collaborator.
       const endPosition = editor.state.doc.content.size;
+
       const inserted = editor.commands.insertContentAt(
         endPosition,
         importedDocument.content,
-        { updateSelection: true },
+        {
+          updateSelection: true,
+        },
       );
+
       if (!inserted) {
         throw new Error("Не удалось добавить содержимое DOCX в документ.");
       }
@@ -79,6 +139,7 @@ export default function EditorHeader(props) {
     } catch (error) {
       console.error("DOCX import failed:", error);
       setDocxStatus("");
+
       window.alert(
         error instanceof Error
           ? error.message
@@ -125,7 +186,9 @@ export default function EditorHeader(props) {
                 onChange={(e) => setDocName(e.target.value)}
                 onBlur={() => {
                   setIsEditingName(false);
+
                   const trimmed = props.docName.trim();
+
                   if (trimmed) {
                     // Сохраняем в общую карту Yjs (синхронизируется со всеми)
                     props.yMetadata.current.set("name", trimmed);
@@ -139,8 +202,10 @@ export default function EditorHeader(props) {
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") e.target.blur();
+
                   if (e.key === "Escape") {
                     setIsEditingName(false);
+
                     setDocName(
                       props.yMetadata.current.get("name") ||
                         `Документ ${props.docId}`,
@@ -176,6 +241,7 @@ export default function EditorHeader(props) {
                 {props.docName || `Документ ${props.docId}`}
               </h1>
             )}
+
             <SaveIndicator provider={props.provider} />
           </div>
         </div>
@@ -195,6 +261,7 @@ export default function EditorHeader(props) {
             style={{ display: "none" }}
             onChange={(event) => handleDocxImport(props.editor, event)}
           />
+
           <button
             onClick={() => importFileRef.current?.click()}
             style={{
@@ -209,6 +276,7 @@ export default function EditorHeader(props) {
           >
             Импорт DOCX
           </button>
+
           <button
             onClick={() => handleDocxExport(props.editor)}
             style={{
@@ -223,6 +291,7 @@ export default function EditorHeader(props) {
           >
             Экспорт DOCX
           </button>
+
           <button
             onClick={copyLink}
             style={{
@@ -237,6 +306,7 @@ export default function EditorHeader(props) {
           >
             Поделиться ссылкой
           </button>
+
           <button
             onClick={createNewDoc}
             style={{
@@ -251,8 +321,26 @@ export default function EditorHeader(props) {
           >
             Новый документ
           </button>
+
+          <button
+            onClick={deleteDocument}
+            disabled={isDeleting}
+            style={{
+              padding: "8px 16px",
+              fontSize: "14px",
+              background: "#fff",
+              color: "#b42318",
+              border: "1px solid #b42318",
+              cursor: isDeleting ? "wait" : "pointer",
+              opacity: isDeleting ? 0.6 : 1,
+              fontFamily: "monospace",
+            }}
+          >
+            {isDeleting ? "Удаление..." : "Удалить документ"}
+          </button>
         </div>
       </div>
+
       {docxStatus && (
         <div
           role="status"
@@ -279,7 +367,6 @@ export default function EditorHeader(props) {
         <div
           style={{
             position: "sticky",
-
             fontSize: "12px",
             color: "#666",
             marginBottom: "8px",
@@ -290,6 +377,7 @@ export default function EditorHeader(props) {
         >
           Участники ({props.provider.awareness.getStates().size})
         </div>
+
         <PresenceBar
           awareness={props.provider.awareness}
           userName={props.userName}
