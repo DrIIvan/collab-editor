@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 // Список участников
 export default function PresenceBar(props) {
   const [states, setStates] = useState([]);
+  const myClientId = props.awareness.clientID;
 
   useEffect(() => {
     const update = () => {
@@ -12,6 +13,7 @@ export default function PresenceBar(props) {
           user: state.user,
         }))
         .filter((s) => s.user?.name);
+
       setStates(allStates);
     };
 
@@ -37,7 +39,7 @@ export default function PresenceBar(props) {
             alignItems: "center",
             gap: "6px",
             padding: "4px 8px",
-            background: user.name === props.userName ? "#f0f0f0" : "transparent",
+            background: clientId === String(myClientId) ? "#f0f0f0" : "transparent",
             border: "1px solid #000",
             fontSize: "13px",
             fontFamily: "monospace",
@@ -52,9 +54,8 @@ export default function PresenceBar(props) {
             }}
           />
           <span>{user.name}</span>
-
           {/* Кнопка смены имени — только для текущего пользователя */}
-          {user.name === props.userName && (
+          {clientId === String(myClientId) && (
             <button
               onClick={props.onChangeName}
               title="Сменить имя"
