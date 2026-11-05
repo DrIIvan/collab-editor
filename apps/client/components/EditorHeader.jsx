@@ -3,6 +3,12 @@ import { downloadDocx, importDocx } from "../src/lib/docx";
 import PresenceBar from "./PresenceBar";
 import SaveIndicator from "./SaveIndicator";
 
+const btnBase =
+  "h-10 cursor-pointer rounded-lg px-4 text-sm font-medium whitespace-nowrap transition-colors";
+const btnPrimary = `${btnBase} bg-[#003399] text-white hover:bg-[#002a80] active:bg-[#00216b]`;
+const btnSecondary = `${btnBase} border border-[#d5dae3] bg-white text-[#1a1a1a] hover:bg-[#f0f2f6]`;
+const btnLight = `${btnBase} bg-[#dce8fb] text-[#1c4fa0] hover:bg-[#c9dbf8]`;
+
 export default function EditorHeader(props) {
   const { setDocName, handleChangeName } = props;
   const [docxStatus, setDocxStatus] = useState("");
@@ -22,7 +28,8 @@ export default function EditorHeader(props) {
 
   const handleDocxExport = (editor) => {
     try {
-      const name = props.yMetadata.current.get("name") || props.docName || props.docId;
+      const name =
+        props.yMetadata.current.get("name") || props.docName || props.docId;
       const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
       downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
@@ -87,17 +94,25 @@ export default function EditorHeader(props) {
     }
   };
 
+  const restoreName = () =>
+    setDocName(
+      props.yMetadata.current.get("name") || `Документ ${props.docId}`,
+    );
+
   return (
-    <>
+    <div className="font-['Inter',Roboto,'Helvetica_Neue',Arial,sans-serif] text-[#1a1a1a]">
       {/* Верхний бар */}
-      <div className="border-b py-3 px-5 flex flex-wrap gap-3 justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div className="flex flex-1 min-w-50 items-center gap-4 "
+      <div className="flex flex-col gap-3 border-b border-[#d5dae3] px-3 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
+          {isEditingName ? (
+            <div className="inline-grid w-fit max-w-sm items-center relative">
+              {/* Скрытый текст-дублер, задающий ширину. Важно: px-3 такой же, как у input */}
+              <span className="invisible col-start-1 row-start-1 px-3 text-lg font-semibold sm:text-xl whitespace-pre">
+                {props.docName || " "}
+              </span>
 
-          >
-            {isEditingName ? (
-              <input className="max-w-75 bg-mauve-100 outline-0 w-full border font-semibold font-mono py-1 px-2"
-
+              <input
+                className="col-start-1 row-start-1 h-10 w-full rounded-md border border-[#003399] bg-white px-3 text-lg font-semibold sm:text-xl outline-none ring-2 ring-[#003399]/20"
                 type="text"
                 autoFocus
                 value={props.docName}
@@ -106,42 +121,33 @@ export default function EditorHeader(props) {
                   setIsEditingName(false);
                   const trimmed = props.docName.trim();
                   if (trimmed) {
-                    // Сохраняем в общую карту Yjs (синхронизируется со всеми)
                     props.yMetadata.current.set("name", trimmed);
                   } else {
-                    // Если стерли всё в ноль, возвращаем дефолтное имя
-                    setDocName(
-                      props.yMetadata.current.get("name") ||
-                        `Документ ${props.docId}`,
-                    );
+                    restoreName();
                   }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") e.target.blur();
                   if (e.key === "Escape") {
                     setIsEditingName(false);
-                    setDocName(
-                      props.yMetadata.current.get("name") ||
-                        `Документ ${props.docId}`,
-                    );
+                    restoreName();
                   }
                 }}
-
               />
-            ) : (
-              <h1
-                onClick={() => setIsEditingName(true)}
-                title="Нажмите, чтобы переименовать"
-                className="text-[16px] m-0  cursor-pointer leading-[1.2]  font-semibold font-mono border-b border-dashed hover:border-solid  border-gray-500">
-                {props.docName || `Документ ${props.docId}`}
-              </h1>
-            )}
-            <SaveIndicator provider={props.provider} />
-          </div>
+            </div>
+          ) : (
+            <h1
+              onClick={() => setIsEditingName(true)}
+              title="Нажмите, чтобы переименовать"
+              className="m-0 min-w-0 max-w-sm border-b border-dashed border-gray-400 cursor-pointer truncate rounded-sm px-2 py-1 text-lg font-semibold leading-tight transition-colors hover:bg-[#f0f2f6] sm:text-xl"
+            >
+              {props.docName || `Документ ${props.docId}`}
+            </h1>
+          )}
+          <SaveIndicator provider={props.provider} />
         </div>
 
-        <div className="flex flex-wrap gap-2"
-        >
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <input
             ref={importFileRef}
             type="file"
@@ -152,97 +158,38 @@ export default function EditorHeader(props) {
           />
           <button
             onClick={() => importFileRef.current?.click()}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
+            className={btnSecondary}
           >
             Импорт DOCX
           </button>
           <button
             onClick={() => handleDocxExport(props.editor)}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
+            className={btnSecondary}
           >
             Экспорт DOCX
           </button>
-          <button
-            onClick={copyLink}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#000",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
+          <button onClick={copyLink} className={btnPrimary}>
             Поделиться ссылкой
           </button>
-          <button
-            onClick={createNewDoc}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              background: "#fff",
-              color: "#000",
-              border: "1px solid #000",
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
+          <button onClick={createNewDoc} className={btnLight}>
             Новый документ
           </button>
         </div>
       </div>
+
       {docxStatus && (
         <div
           role="status"
           aria-live="polite"
-          style={{
-            padding: "6px 20px",
-            fontSize: "12px",
-            color: "#555",
-            fontFamily: "monospace",
-          }}
+          className="border-b border-[#d5dae3] bg-[#f5f7fa] px-3 py-1.5 text-xs text-[#5f6672] sm:px-5"
         >
           {docxStatus}
         </div>
       )}
 
       {/* Панель участников */}
-      <div
-        style={{
-          padding: "12px 20px",
-          borderBottom: "1px solid #e0e0e0",
-          background: "#fafafa",
-        }}
-      >
-        <div
-          style={{
-            position: "sticky",
-
-            fontSize: "12px",
-            color: "#666",
-            marginBottom: "8px",
-            fontFamily: "monospace",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
+      <div className="border-b border-[#d5dae3] bg-[#f5f7fa] px-3 py-3 sm:px-5">
+        <div className="mb-2 text-xs font-medium tracking-wide text-[#5f6672] uppercase">
           Участники ({props.provider.awareness.getStates().size})
         </div>
         <PresenceBar
@@ -251,6 +198,6 @@ export default function EditorHeader(props) {
           onChangeName={handleChangeName}
         />
       </div>
-    </>
+    </div>
   );
 }

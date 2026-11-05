@@ -17,44 +17,15 @@ export default function NameModal({ onSubmit }) {
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-    >
+    <div className="fixed inset-0 z-1000 flex items-end justify-center bg-black/50 p-3 font-['Inter',Roboto,'Helvetica_Neue',Arial,sans-serif] sm:items-center sm:p-6">
       <form
         onSubmit={handleSubmit}
-        style={{
-          background: "#fff",
-          padding: "32px",
-          maxWidth: "400px",
-          width: "90%",
-          border: "1px solid #000",
-        }}
+        className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl sm:p-8"
       >
-        <h2
-          style={{
-            fontSize: "20px",
-            fontWeight: 600,
-            marginBottom: "8px",
-            fontFamily: "monospace",
-          }}
-        >
+        <h2 className="mb-2 text-xl font-semibold text-[#1a1a1a] sm:text-2xl">
           Как вас зовут?
         </h2>
-        <p
-          style={{
-            fontSize: "14px",
-            color: "#666",
-            marginBottom: "24px",
-          }}
-        >
+        <p className="mb-6 text-sm text-[#5f6672]">
           Имя будет видно другим участникам
         </p>
         <input
@@ -63,30 +34,13 @@ export default function NameModal({ onSubmit }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Введите имя"
-          style={{
-            width: "100%",
-            padding: "12px",
-            fontSize: "16px",
-            border: "1px solid #000",
-            marginBottom: "16px",
-            fontFamily: "monospace",
-          }}
           maxLength={30}
+          className="mb-4 h-12 w-full rounded-lg border border-[#8b93a1] bg-white px-4 text-base text-[#1a1a1a] outline-none transition-colors placeholder:text-[#6b7280] focus:border-[#003399] focus:ring-2 focus:ring-[#003399]/20"
         />
         <button
           type="submit"
           disabled={!name.trim()}
-          style={{
-            width: "100%",
-            padding: "12px",
-            fontSize: "16px",
-            background: name.trim() ? "#000" : "#ccc",
-            color: "#fff",
-            border: "none",
-            cursor: name.trim() ? "pointer" : "not-allowed",
-            fontFamily: "monospace",
-            fontWeight: 600,
-          }}
+          className="h-12 w-full cursor-pointer rounded-lg bg-[#003399] text-base font-medium text-white transition-colors hover:bg-[#002a80] active:bg-[#00216b] disabled:cursor-not-allowed disabled:bg-[#c9ced8]"
         >
           Войти
         </button>
@@ -94,5 +48,3 @@ export default function NameModal({ onSubmit }) {
     </div>
   );
 }
-
-
