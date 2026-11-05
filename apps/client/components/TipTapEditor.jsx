@@ -35,31 +35,24 @@ export default function TipTapEditor(props) {
   //     }
   //   }, [editor, provider, userName, userColor]);
 
-  if (!editor) {
-    return <div style={{ padding: "20px" }}>Загрузка редактора...</div>;
+    if (!editor) {
+    return (
+      <div className="bg-[#e4e8f0] p-5 font-['Inter',Roboto,'Helvetica_Neue',Arial,sans-serif] text-[#5f6672]">
+        Загрузка редактора...
+      </div>
+    );
   }
   return (
-    <>
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 30,
-          background: "#fff",
-        }}
-      >
+    <div className="min-h-screen bg-[#e4e8f0] font-['Inter',Roboto,'Helvetica_Neue',Arial,sans-serif]">
+      <div className="sticky top-0 z-30 bg-white shadow-sm">
         {typeof header === "function" ? header(editor) : header}
         <MenuBar editor={editor} />
-      </div>{" "}
-      <div
-        style={{
-          maxWidth: "800px",
-          margin: "0 auto",
-          padding: "20px",
-        }}
-      >
-        <EditorContent editor={editor} />
       </div>
-    </>
+      <div className="mx-auto w-full max-w-220 px-2 py-3 sm:px-2 sm:py-6">
+        <div className="rounded-3xl px-3 bg-white shadow-sm">
+          <EditorContent editor={editor} />
+        </div>
+      </div>
+    </div>
   );
 }

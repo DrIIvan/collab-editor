@@ -1,4 +1,4 @@
-
+@import "tailwindcss";
 /* Контейнер курсора другого участника */
 .collaboration-carets__caret {
   position: relative;

@@ -23,59 +23,36 @@ export default function PresenceBar(props) {
   }, [props.awareness]);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "8px",
-        alignItems: "center",
-        flexWrap: "wrap",
-      }}
-    >
-      {states.map(({ clientId, user }) => (
-        <div
-          key={clientId}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "4px 8px",
-            background: clientId === String(myClientId) ? "#f0f0f0" : "transparent",
-            border: "1px solid #000",
-            fontSize: "13px",
-            fontFamily: "monospace",
-          }}
-        >
+    <div className="flex flex-wrap items-center gap-2">
+      {states.map(({ clientId, user }) => {
+        const isMe = user.name === props.userName;
+        return (
           <div
-            style={{
-              width: "12px",
-              height: "12px",
-              background: user.color,
-              border: "1px solid #000",
-            }}
-          />
-          <span>{user.name}</span>
-          {/* Кнопка смены имени — только для текущего пользователя */}
-          {clientId === String(myClientId) && (
-            <button
-              onClick={props.onChangeName}
-              title="Сменить имя"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "14px",
-                padding: "0 4px",
-                marginLeft: "4px",
-                opacity: 0.6,
-              }}
-              onMouseOver={(e) => (e.target.style.opacity = 1)}
-              onMouseOut={(e) => (e.target.style.opacity = 0.6)}
-            >
-              ✏️
-            </button>
-          )}
-        </div>
-      ))}
+            key={clientId}
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] text-[#1a1a1a] ${
+              isMe ? "bg-[#dce8fb]" : "border border-[#d5dae3] bg-white"
+            }`}
+          >
+            {/* Цвет пользователя приходит из awareness — единственный inline-стиль */}
+            <div
+              className="size-3 shrink-0 rounded-full"
+              style={{ background: user.color }}
+            />
+            <span className="max-w-40 truncate">{user.name}</span>
+
+            {/* Кнопка смены имени — только для текущего пользователя */}
+            {isMe && (
+              <button
+                onClick={props.onChangeName}
+                title="Сменить имя"
+                className="-mr-1 cursor-pointer rounded-md px-1 text-sm opacity-60 transition-opacity hover:opacity-100"
+              >
+                ✏️
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
