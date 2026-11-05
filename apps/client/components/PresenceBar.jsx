@@ -30,13 +30,11 @@ export default function PresenceBar(props) {
           <div
             key={clientId}
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] text-[#1a1a1a] ${
-              isMe
-                ? "bg-[#dce8fb]"
-                : "border border-[#d5dae3] bg-white"
+              isMe ? "bg-[#dce8fb]" : "border border-[#d5dae3] bg-white"
             }`}
           >
             {/* Цвет пользователя приходит из awareness — единственный inline-стиль */}
-            <span
+            <div
               className="size-3 shrink-0 rounded-full"
               style={{ background: user.color }}
             />
