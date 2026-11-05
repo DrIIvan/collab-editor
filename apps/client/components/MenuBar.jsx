@@ -93,35 +93,49 @@ const icons = {
   ),
 };
 
+const EMPTY = {
+  isBold: false,
+  isItalic: false,
+  isStrike: false,
+  isUnderline: false,
+  isCode: false,
+  heading: 0,
+  isBulletList: false,
+  isOrderedList: false,
+  isCodeBlock: false,
+  isBlockquote: false,
+  isLink: false,
+  canUndo: false,
+  canRedo: false,
+};
+
 export default function MenuBar({ editor }) {
   const s = useEditorState({
     editor,
-    selector: ({ editor }) => ({
-      isBold: editor.isActive("bold"),
-      canBold: editor.can().chain().toggleBold().run(),
-      isItalic: editor.isActive("italic"),
-      canItalic: editor.can().chain().toggleItalic().run(),
-      isStrike: editor.isActive("strike"),
-      canStrike: editor.can().chain().toggleStrike().run(),
-      isUnderline: editor.isActive("underline"),
-      canUnderline: editor.can().chain().toggleUnderline().run(),
-      isCode: editor.isActive("code"),
-      canCode: editor.can().chain().toggleCode().run(),
-      heading:
-        [1, 2, 3, 4, 5, 6].find((l) =>
-          editor.isActive("heading", { level: l }),
-        ) || 0,
-      isBulletList: editor.isActive("bulletList"),
-      isOrderedList: editor.isActive("orderedList"),
-      isCodeBlock: editor.isActive("codeBlock"),
-      isBlockquote: editor.isActive("blockquote"),
-      isLink: editor.isActive("link"),
-      canUndo: editor.can().undo(),
-      canRedo: editor.can().redo(),
-    }),
+    selector: ({ editor }) => {
+      if (!editor) return EMPTY;
+      return {
+        isBold: editor.isActive("bold"),
+        isItalic: editor.isActive("italic"),
+        isStrike: editor.isActive("strike"),
+        isUnderline: editor.isActive("underline"),
+        isCode: editor.isActive("code"),
+        heading: editor.isActive("heading")
+          ? editor.getAttributes("heading").level
+          : 0,
+        isBulletList: editor.isActive("bulletList"),
+        isOrderedList: editor.isActive("orderedList"),
+        isCodeBlock: editor.isActive("codeBlock"),
+        isBlockquote: editor.isActive("blockquote"),
+        isLink: editor.isActive("link"),
+        canUndo: editor.can().undo(),
+        canRedo: editor.can().redo(),
+      };
+    },
   });
 
   if (!editor) return null;
+  // ...дальше всё как было (run, setLink, onHeadingChange, return)
 
   const run = () => editor.chain().focus();
 
@@ -188,7 +202,6 @@ export default function MenuBar({ editor }) {
         <Button
           title="Жирный (Ctrl+B)"
           active={s.isBold}
-          disabled={!s.canBold}
           onClick={() => run().toggleBold().run()}
         >
           <b>B</b>
@@ -196,7 +209,6 @@ export default function MenuBar({ editor }) {
         <Button
           title="Курсив (Ctrl+I)"
           active={s.isItalic}
-          disabled={!s.canItalic}
           onClick={() => run().toggleItalic().run()}
         >
           <i className="font-serif">I</i>
@@ -204,7 +216,6 @@ export default function MenuBar({ editor }) {
         <Button
           title="Подчёркнутый (Ctrl+U)"
           active={s.isUnderline}
-          disabled={!s.canUnderline}
           onClick={() => run().toggleUnderline().run()}
         >
           <u>U</u>
@@ -212,7 +223,6 @@ export default function MenuBar({ editor }) {
         <Button
           title="Зачёркнутый"
           active={s.isStrike}
-          disabled={!s.canStrike}
           onClick={() => run().toggleStrike().run()}
         >
           <s>S</s>
@@ -220,7 +230,6 @@ export default function MenuBar({ editor }) {
         <Button
           title="Код"
           active={s.isCode}
-          disabled={!s.canCode}
           onClick={() => run().toggleCode().run()}
         >
           {"</>"}
