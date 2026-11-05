@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "cross-env YPERSISTENCE=./yjs-data y-port=1234 HOST=0.0.0.0 npx y-websocket",
-    "dev:no-persist": "cross-env y-port=1234 npx y-websocket",
-    "start": "y-websocket"
+    "dev": "cross-env YPERSISTENCE=./yjs-data PORT=1234 HOST=0.0.0.0 node server.mjs",
+    "start": "node server.mjs"
   },
   "dependencies": {
     "cross-env": "^7.0.3",
