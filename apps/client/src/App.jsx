@@ -203,7 +203,7 @@ function PresenceBar({ awareness, userName, onChangeName }) {
               onMouseOver={(e) => (e.target.style.opacity = 1)}
               onMouseOut={(e) => (e.target.style.opacity = 0.6)}
             >
-              ✏️
+              ✎
             </button>
           )}
         </div>
