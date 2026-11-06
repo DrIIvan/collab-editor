@@ -34,7 +34,7 @@ export default function PresenceBar(props) {
             }`}
           >
             {/* Цвет пользователя приходит из awareness — единственный inline-стиль */}
-            <span
+            <div
               className="size-3 shrink-0 rounded-full"
               style={{ background: user.color }}
             />
