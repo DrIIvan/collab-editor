@@ -9,18 +9,20 @@ import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
 import EditorHeader from "../components/EditorHeader";
 import NameModal from "../components/NameModal";
-import TipTapEditor from "../components/TipTapEditor";
-import SectionEditor from "../components/SectionEditor";
-
+import SectionedEditor from "../components/SectionedEditor";
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
 
 // In development the WebSocket server runs separately. In Docker/production,
 // Nginx proxies /ws to the same-origin collaboration server.
-const SERVER_URL =
-  import.meta.env.VITE_WS_URL ||
-  (import.meta.env.DEV
-    ? "ws://localhost:1234"
-    : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+// const SERVER_URL =
+//   import.meta.env.VITE_WS_URL ||
+//   (import.meta.env.DEV
+//     ? "ws://localhost:1234"
+//     : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+const SERVER_URL = "ws://localhost:1234";
+
+// import { splitDefaultSection } from "./utils/sectionsDoc.js";
+// window.split = () => splitDefaultSection(window.yDoc);
 
 const PALETTE = [
   "#FF6B6B",
@@ -64,50 +66,14 @@ function getColor(awareness) {
   return best;
 }
 
-// Секция монтирует редактор, только когда она рядом с экраном
-function LazySection(props) {
-  const ref = useRef(null);
-  const heightRef = useRef(400);
-  const [visible, setVisible] = useState(props.eager === true);
-
-  // показываем редактор, когда секция рядом с экраном (запас 800px)
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      ([e]) => setVisible(e.isIntersecting),
-      {
-        rootMargin: "800px 0px",
-      },
-    );
-
-    io.observe(ref.current);
-
-    return () => io.disconnect();
-  }, []);
-
-  // запоминаем высоту, чтобы скролл не прыгал, когда секция выгружается
-  useEffect(() => {
-    if (!visible) return;
-
-    const ro = new ResizeObserver(() => {
-      heightRef.current = ref.current.offsetHeight;
-    });
-
-    ro.observe(ref.current);
-
-    return () => ro.disconnect();
-  }, [visible]);
-
-  return (
-    <div
-      ref={ref}
-      style={{ minHeight: visible ? undefined : heightRef.current }}
-    >
-      {visible && <SectionEditor {...props} />}
-    </div>
-  );
-}
+import { resplitAll } from "./utils/sectionsDoc";
 
 function App() {
+  useEffect(() => {
+    window.yDoc = yDoc.current;
+    window.resplit = () => resplitAll(yDoc.current);
+  }, []);
+
   const yDoc = useRef(new Y.Doc());
   const yMetadata = useRef(yDoc.current.getMap("metadata"));
 
@@ -180,10 +146,13 @@ function App() {
   //     };
   //   }
   // }, [userName, docId]);
+  window.Y = Y;
+  window.yDoc = yDoc.current;
 
   useEffect(() => {
     if (userName && documentStatus === "available" && !provider) {
       const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
+
       const awareness = p.awareness;
 
       // Other collaborators are also moved out of the editor when the server
@@ -276,9 +245,7 @@ function App() {
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
 
-        throw new Error(
-          result.error || "Не удалось создать новый документ.",
-        );
+        throw new Error(result.error || "Не удалось создать новый документ.");
       }
 
       // Reload to initialize a brand-new Y.Doc and provider for the reused ID.
@@ -324,8 +291,8 @@ function App() {
         <h1 style={{ fontSize: "22px" }}>Документ удалён</h1>
 
         <p style={{ color: "#666", lineHeight: 1.6 }}>
-          Этот документ удалён. Его прежнее содержимое восстановить нельзя,
-          но можно создать новый пустой документ по этому же адресу.
+          Этот документ удалён. Его прежнее содержимое восстановить нельзя, но
+          можно создать новый пустой документ по этому же адресу.
         </p>
 
         <div
@@ -428,7 +395,7 @@ function App() {
     >
       {/* Редактор */}
       <div>
-        <TipTapEditor
+        <SectionedEditor
           provider={provider}
           yDoc={yDoc.current}
           userName={userName}
@@ -437,6 +404,7 @@ function App() {
           header={(editor) => (
             <EditorHeader
               editor={editor}
+              yDoc={yDoc.current}
               provider={provider}
               docId={docId}
               docName={docName}

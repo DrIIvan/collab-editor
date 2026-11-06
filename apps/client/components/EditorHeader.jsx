@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { downloadDocx, importDocx } from "../src/lib/docx";
 import PresenceBar from "./PresenceBar";
 import SaveIndicator from "./SaveIndicator";
+import { getFullDocJSON, appendToSections } from "../src/utils/sectionsDoc";
 
 const btnBase =
   "h-10 cursor-pointer rounded-lg px-4 text-sm font-medium whitespace-nowrap transition-colors";
@@ -60,26 +61,44 @@ export default function EditorHeader(props) {
       console.error("Document deletion failed:", error);
 
       window.alert(
-        error instanceof Error
-          ? error.message
-          : "Не удалось удалить документ.",
+        error instanceof Error ? error.message : "Не удалось удалить документ.",
       );
 
       setIsDeleting(false);
     }
   };
 
-  const handleDocxExport = (editor) => {
+  // const handleDocxExport = (editor) => {
+  //   try {
+  //     const name =
+  //       props.yMetadata.current.get("name") || props.docName || props.docId;
+
+  //     const safeDocName = name.replace(
+  //       /[^a-zA-Zа-яА-Я0-9._-]/gi,
+  //       "-",
+  //     );
+
+  //     downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
+  //     setDocxStatus("DOCX-файл подготовлен к скачиванию");
+  //   } catch (error) {
+  //     console.error("DOCX export failed:", error);
+
+  //     window.alert(
+  //       error instanceof Error
+  //         ? error.message
+  //         : "Не удалось экспортировать документ в DOCX.",
+  //     );
+  //   }
+  // };
+
+  const handleDocxExport = () => {
     try {
       const name =
         props.yMetadata.current.get("name") || props.docName || props.docId;
 
-      const safeDocName = name.replace(
-        /[^a-zA-Zа-яА-Я0-9._-]/gi,
-        "-",
-      );
+      const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
 
-      downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
+      downloadDocx(getFullDocJSON(props.yDoc), `${safeDocName}.docx`);
       setDocxStatus("DOCX-файл подготовлен к скачиванию");
     } catch (error) {
       console.error("DOCX export failed:", error);
@@ -92,7 +111,7 @@ export default function EditorHeader(props) {
     }
   };
 
-  const handleDocxImport = async (editor, event) => {
+  const handleDocxImport = async (event) => {
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -120,22 +139,11 @@ export default function EditorHeader(props) {
     try {
       setDocxStatus("Импорт DOCX...");
 
-      const importedDocument = await importDocx(
-        await file.arrayBuffer(),
-      );
+      const importedDocument = await importDocx(await file.arrayBuffer());
 
-      // Insert at the document's end instead of setContent(), which replaces
-      // the entire shared document. A single TipTap transaction keeps the
-      // append operation synchronized to every connected Yjs collaborator.
-      const endPosition = editor.state.doc.content.size;
-
-      const inserted = editor.commands.insertContentAt(
-        endPosition,
-        importedDocument.content,
-        {
-          updateSelection: true,
-        },
-      );
+      // Дописываем новые секции в конец списка одной Yjs-транзакцией,
+      // она синхронизируется у всех участников
+      const inserted = appendToSections(props.yDoc, importedDocument);
 
       if (!inserted) {
         throw new Error("Не удалось добавить содержимое DOCX в документ.");
@@ -153,6 +161,67 @@ export default function EditorHeader(props) {
       );
     }
   };
+  // const handleDocxImport = async (editor, event) => {
+  //   const file = event.target.files?.[0];
+
+  //   if (!file) return;
+
+  //   event.target.value = "";
+
+  //   if (!file.name.toLowerCase().endsWith(".docx")) {
+  //     window.alert("Выберите файл в формате DOCX.");
+  //     return;
+  //   }
+
+  //   if (file.size > 25 * 1024 * 1024) {
+  //     window.alert("Размер DOCX-файла не должен превышать 25 МБ.");
+  //     return;
+  //   }
+
+  //   if (
+  //     !window.confirm(
+  //       "Содержимое DOCX будет добавлено в конец текущего документа у всех участников. Продолжить?",
+  //     )
+  //   ) {
+  //     return;
+  //   }
+
+  //   try {
+  //     setDocxStatus("Импорт DOCX...");
+
+  //     const importedDocument = await importDocx(
+  //       await file.arrayBuffer(),
+  //     );
+
+  //     // Insert at the document's end instead of setContent(), which replaces
+  //     // the entire shared document. A single TipTap transaction keeps the
+  //     // append operation synchronized to every connected Yjs collaborator.
+  //     const endPosition = editor.state.doc.content.size;
+
+  //     const inserted = editor.commands.insertContentAt(
+  //       endPosition,
+  //       importedDocument.content,
+  //       {
+  //         updateSelection: true,
+  //       },
+  //     );
+
+  //     if (!inserted) {
+  //       throw new Error("Не удалось добавить содержимое DOCX в документ.");
+  //     }
+
+  //     setDocxStatus(`Добавлено в конец документа: ${file.name}`);
+  //   } catch (error) {
+  //     console.error("DOCX import failed:", error);
+  //     setDocxStatus("");
+
+  //     window.alert(
+  //       error instanceof Error
+  //         ? error.message
+  //         : "Не удалось импортировать DOCX-файл.",
+  //     );
+  //   }
+  // };
 
   const restoreName = () =>
     setDocName(
@@ -221,7 +290,7 @@ export default function EditorHeader(props) {
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             aria-label="Выбрать DOCX-файл для импорта"
             className="hidden"
-            onChange={(event) => handleDocxImport(props.editor, event)}
+            onChange={handleDocxImport}
           />
 
           <button
@@ -231,10 +300,7 @@ export default function EditorHeader(props) {
             Импорт DOCX
           </button>
 
-          <button
-            onClick={() => handleDocxExport(props.editor)}
-            className={btnSecondary}
-          >
+          <button onClick={handleDocxExport} className={btnSecondary}>
             Экспорт DOCX
           </button>
           <button onClick={copyLink} className={btnPrimary}>

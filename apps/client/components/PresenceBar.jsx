@@ -23,9 +23,9 @@ export default function PresenceBar(props) {
   }, [props.awareness]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 font-['Inter',Roboto,'Helvetica_Neue',Arial,sans-serif]">
       {states.map(({ clientId, user }) => {
-        const isMe = user.name === props.userName;
+        const isMe = clientId === String(myClientId);
         return (
           <div
             key={clientId}
@@ -34,11 +34,14 @@ export default function PresenceBar(props) {
             }`}
           >
             {/* Цвет пользователя приходит из awareness — единственный inline-стиль */}
-            <div
+            <span
               className="size-3 shrink-0 rounded-full"
               style={{ background: user.color }}
             />
             <span className="max-w-40 truncate">{user.name}</span>
+            {isMe && (
+              <span className="text-xs text-[#5f6672]">(вы)</span>
+            )}
 
             {/* Кнопка смены имени — только для текущего пользователя */}
             {isMe && (
