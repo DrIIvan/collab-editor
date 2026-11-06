@@ -8,6 +8,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import "./styles.css";
 import MenuBar from "../components/MenuBar/MenuBar";
+import { downloadDocx, importDocx } from "./lib/docx";
 
 // const SERVER_URL = 'wss://server-collab.cloudpub.ru';
 
@@ -31,11 +32,27 @@ const PALETTE = [
   "#52B788",
 ];
 
-function getColor(clientId) {
-  const hash = clientId
-    .split("")
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return PALETTE[hash % PALETTE.length];
+const PLACEHOLDER_COLOR = "#adb5bd";
+
+// function getColor(clientId) {
+//   const hash = clientId
+//     .split("")
+//     .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+//   return PALETTE[hash % PALETTE.length];
+// }
+
+function getColor(awareness) {
+  const me = awareness.clientID;
+  const usage = new Map(PALETTE.map((c) => [c, 0]));
+  awareness.getStates().forEach((state, id) => {
+    const c = state.user?.color;
+    if (id !== me && usage.has(c)) usage.set(c, usage.get(c) + 1);
+  });
+  let best = PALETTE[0];
+  for (const c of PALETTE) {
+    if (usage.get(c) < usage.get(best)) best = c;
+  }
+  return best;
 }
 
 // Модалка для ввода имени
@@ -310,7 +327,7 @@ function TipTapEditor({
           background: "#fff",
         }}
       >
-        {header}
+        {typeof header === "function" ? header(editor) : header}
         <MenuBar editor={editor} />
       </div>{" "}
       <div
@@ -328,13 +345,18 @@ function TipTapEditor({
 
 function App() {
   const yDoc = useRef(new Y.Doc());
+  const yMetadata = useRef(yDoc.current.getMap('metadata'));
   const [provider, setProvider] = useState(null);
   const [userName, setUserName] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [docxStatus, setDocxStatus] = useState("");
+  const importFileRef = useRef(null);
+  const [docName, setDocName] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
 
   const docId = window.location.pathname.split("/").pop() || "default";
   const clientId = useRef(Math.random().toString(36).substring(2)).current;
-  const userColor = getColor(clientId);
+  const userColor = PLACEHOLDER_COLOR;
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -345,12 +367,76 @@ function App() {
     }
   }, []);
 
+  // useEffect(() => {
+  //   if (userName && !provider) {
+  //     const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
+  //     setProvider(p);
+
+  //     return () => {
+  //       p.destroy();
+  //       yDoc.current.destroy();
+  //     };
+  //   }
+  // }, [userName, docId]);
+
+  useEffect(() => {
+    const updateName = () => {
+      const name = yMetadata.current.get('name');
+      if (name) setDocName(name);
+    };
+
+    yMetadata.current.observe(updateName);
+
+    if (yMetadata.current.get('name')) {
+      setDocName(yMetadata.current.get('name'));
+    } else {
+      setDocName(`Документ ${docId}`);
+    }
+
+    return () => yMetadata.current.unobserve(updateName);
+  }, [docId]);
+
+  useEffect(() => {
+    document.title = docName ? `${docName} — Collab Editor` : "Collab Editor";
+  }, [docName]);
+
   useEffect(() => {
     if (userName && !provider) {
       const p = new WebsocketProvider(SERVER_URL, docId, yDoc.current);
+      const awareness = p.awareness;
+
+      // Выбираем цвет, если он ещё не выбран или его занял клиент с меньшим clientID
+      const ensureColor = () => {
+        if (!p.synced) return;
+        const mine = awareness.getLocalState()?.user;
+        if (!mine) return;
+        const me = awareness.clientID;
+        const unassigned = !PALETTE.includes(mine.color);
+        let conflict = false;
+        awareness.getStates().forEach((state, id) => {
+          if (
+            id !== me &&
+            state.user?.color === mine.color &&
+            (unassigned || id < me)
+          ) {
+            conflict = true;
+          }
+        });
+        if (unassigned || conflict) {
+          awareness.setLocalStateField("user", {
+            ...mine,
+            color: getColor(awareness),
+          });
+        }
+      };
+
+      p.on("sync", ensureColor);
+      awareness.on("change", ensureColor);
       setProvider(p);
 
       return () => {
+        awareness.off("change", ensureColor);
+        p.off("sync", ensureColor);
         p.destroy();
         yDoc.current.destroy();
       };
@@ -378,6 +464,73 @@ function App() {
     window.location.href = "/d/" + newId;
   };
 
+  const handleDocxImport = async (editor, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      window.alert("Выберите файл в формате DOCX.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      window.alert("Размер DOCX-файла не должен превышать 25 МБ.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Содержимое DOCX будет добавлено в конец текущего документа у всех участников. Продолжить?",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setDocxStatus("Импорт DOCX...");
+      const importedDocument = await importDocx(await file.arrayBuffer());
+
+      // Insert at the document's end instead of setContent(), which replaces
+      // the entire shared document. A single TipTap transaction keeps the
+      // append operation synchronized to every connected Yjs collaborator.
+      const endPosition = editor.state.doc.content.size;
+      const inserted = editor.commands.insertContentAt(
+        endPosition,
+        importedDocument.content,
+        { updateSelection: true },
+      );
+      if (!inserted) {
+        throw new Error("Не удалось добавить содержимое DOCX в документ.");
+      }
+
+      setDocxStatus(`Добавлено в конец документа: ${file.name}`);
+    } catch (error) {
+      console.error("DOCX import failed:", error);
+      setDocxStatus("");
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось импортировать DOCX-файл.",
+      );
+    }
+  };
+
+  const handleDocxExport = (editor) => {
+    try {
+      const name = yMetadata.current.get('name') || docName || docId;
+      const safeDocName = name.replace(/[^a-zA-Zа-яА-Я0-9._-]/gi, "-");
+      downloadDocx(editor.getJSON(), `${safeDocName}.docx`);
+      setDocxStatus("DOCX-файл подготовлен к скачиванию");
+    } catch (error) {
+      console.error("DOCX export failed:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось экспортировать документ в DOCX.",
+      );
+    }
+  };
+
   if (showModal) {
     return <NameModal onSubmit={handleNameSubmit} />;
   }
@@ -402,7 +555,7 @@ function App() {
           userName={userName}
           userColor={userColor}
           clientId={clientId}
-          header={
+          header={(editor) => (
             <>
               {/* Верхний бар */}
               <div
@@ -423,17 +576,70 @@ function App() {
                     gap: "16px",
                   }}
                 >
-                  <h1
+                  <div
                     style={{
-                      fontSize: "16px",
-                      fontWeight: 600,
-                      fontFamily: "monospace",
-                      margin: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "16px",
+                      flex: 1,
+                      minWidth: "200px",
                     }}
                   >
-                    Doc: {docId}
-                  </h1>
-                  <SaveIndicator provider={provider} />
+                    {isEditingName ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={docName}
+                        onChange={(e) => setDocName(e.target.value)}
+                        onBlur={() => {
+                          setIsEditingName(false);
+                          const trimmed = docName.trim();
+                          if (trimmed) {
+                            // Сохраняем в общую карту Yjs (синхронизируется со всеми)
+                            yMetadata.current.set('name', trimmed);
+                          } else {
+                            // Если стерли всё в ноль, возвращаем дефолтное имя
+                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.target.blur();
+                          if (e.key === 'Escape') {
+                            setIsEditingName(false);
+                            setDocName(yMetadata.current.get('name') || `Документ ${docId}`);
+                          }
+                        }}
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 600,
+                          fontFamily: "monospace",
+                          padding: "4px 8px",
+                          border: "1px solid #000",
+                          outline: "none",
+                          background: "#fff",
+                          maxWidth: "300px",
+                          width: "100%",
+                        }}
+                      />
+                    ) : (
+                      <h1
+                        onClick={() => setIsEditingName(true)}
+                        title="Нажмите, чтобы переименовать"
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 600,
+                          fontFamily: "monospace",
+                          margin: 0,
+                          cursor: "pointer",
+                          borderBottom: "1px dashed #999",
+                          lineHeight: "1.2",
+                        }}
+                      >
+                        {docName || `Документ ${docId}`}
+                      </h1>
+                    )}
+                    <SaveIndicator provider={provider} />
+                  </div>
                 </div>
 
                 <div
@@ -443,6 +649,42 @@ function App() {
                     flexWrap: "wrap",
                   }}
                 >
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    aria-label="Выбрать DOCX-файл для импорта"
+                    style={{ display: "none" }}
+                    onChange={(event) => handleDocxImport(editor, event)}
+                  />
+                  <button
+                    onClick={() => importFileRef.current?.click()}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Импорт DOCX
+                  </button>
+                  <button
+                    onClick={() => handleDocxExport(editor)}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: "14px",
+                      background: "#fff",
+                      color: "#000",
+                      border: "1px solid #000",
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    Экспорт DOCX
+                  </button>
                   <button
                     onClick={copyLink}
                     style={{
@@ -473,6 +715,20 @@ function App() {
                   </button>
                 </div>
               </div>
+              {docxStatus && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    padding: "6px 20px",
+                    fontSize: "12px",
+                    color: "#555",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {docxStatus}
+                </div>
+              )}
 
               {/* Панель участников */}
               <div
@@ -503,7 +759,7 @@ function App() {
                 />
               </div>
             </>
-          }
+          )}
         />
       </div>
     </div>
