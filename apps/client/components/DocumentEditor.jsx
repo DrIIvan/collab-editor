@@ -52,6 +52,33 @@ export default function DocumentEditor() {
   const userColor = PLACEHOLDER_COLOR;
 
   useEffect(() => {
+    if (!provider) return;
+
+    const observer = () => {
+    setDocName(yMetadata.current.get("name") || "");
+    };
+
+    // Подписываемся на любые изменения yMetadata (локальные и сетевые)
+    yMetadata.current.observe(observer);
+
+    const handleSync = () => {
+    setDocName(yMetadata.current.get("name") || "");
+    };
+
+    provider.on("sync", handleSync);
+
+    // Если документ уже синхронизирован при монтировании
+    if (provider.synced) {
+    handleSync();
+    }
+
+    return () => {
+    yMetadata.current.unobserve(observer);
+    provider.off("sync", handleSync);
+    };
+  }, [provider]);
+
+  useEffect(() => {
     const savedName = localStorage.getItem("userName");
     if (savedName) {
       setUserName(savedName);

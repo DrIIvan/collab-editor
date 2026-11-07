@@ -248,13 +248,14 @@ export default function EditorHeader(props) {
                 onChange={(e) => setDocName(e.target.value)}
                 onBlur={() => {
                   setIsEditingName(false);
-
                   const trimmed = props.docName.trim();
 
                   if (trimmed) {
                     props.yMetadata.current.set("name", trimmed);
                   } else {
-                    restoreName();
+                    // Если имя стёрто, удаляем его из Yjs, чтобы вернуть дефолтное
+                    props.yMetadata.current.delete("name");
+                    setDocName("");
                   }
                 }}
                 onKeyDown={(e) => {
@@ -262,11 +263,8 @@ export default function EditorHeader(props) {
 
                   if (e.key === "Escape") {
                     setIsEditingName(false);
-
-                    setDocName(
-                      props.yMetadata.current.get("name") ||
-                        `Документ ${props.docId}`,
-                    );
+                    // Возвращаем то, что сейчас сохранено в Yjs
+                    setDocName(props.yMetadata.current.get("name") || "");
                   }
                 }}
               />
