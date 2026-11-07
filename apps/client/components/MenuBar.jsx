@@ -1,36 +1,18 @@
 import React from "react";
 import { useEditorState } from "@tiptap/react";
 
-
-const btn = (active, disabled) => ({
-  width: "28px",
-  height: "28px",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 0,
-  fontSize: "14px",
-  fontFamily: "monospace",
-  background: active ? "#000" : "transparent",
-  color: active ? "#fff" : "#000",
-  border: "none",
-  cursor: disabled ? "not-allowed" : "pointer",
-  opacity: disabled ? 0.3 : 1,
-});
-
 function Button(props) {
-   const { onClick } = props;
+  const { onClick } = props;
   return (
     <button
       type="button"
-      className="mb-btn"
       title={props.title}
       aria-label={props.title}
       aria-pressed={props.active}
       onClick={onClick}
       disabled={props.disabled}
       onMouseDown={(e) => e.preventDefault()}
-      style={btn(props.active, props.disabled)}
+      className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg p-0 font-mono text-sm text-[#1a1a1a] transition-colors hover:bg-[#e4e8f0] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent aria-pressed:bg-[#003399] aria-pressed:text-white aria-pressed:hover:bg-[#002a80]"
     >
       {props.children}
     </button>
@@ -38,22 +20,11 @@ function Button(props) {
 }
 
 function Group({ children }) {
-  return <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>{children}</div>;
+  return <div className="flex items-center gap-0.5">{children}</div>;
 }
 
 function Divider() {
-  return (
-    <div
-      style={{
-        width: "1px",
-        height: "20px",
-        background: "#000",
-        opacity: 0.25,
-        margin: "0 8px",
-        flexShrink: 0,
-      }}
-    />
-  );
+  return <div className="mx-2 hidden h-5 w-px bg-[#d5dae3] sm:block" />;
 }
 
 function Icon({ children, size = 18 }) {
@@ -65,8 +36,8 @@ function Icon({ children, size = 18 }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="square"
-      strokeLinejoin="miter"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       {children}
     </svg>
@@ -122,39 +93,58 @@ const icons = {
   ),
 };
 
+const EMPTY = {
+  isBold: false,
+  isItalic: false,
+  isStrike: false,
+  isUnderline: false,
+  isCode: false,
+  heading: 0,
+  isBulletList: false,
+  isOrderedList: false,
+  isCodeBlock: false,
+  isBlockquote: false,
+  isLink: false,
+  canUndo: false,
+  canRedo: false,
+};
 
 export default function MenuBar({ editor }) {
   const s = useEditorState({
     editor,
-    selector: ({ editor }) => ({
-      isBold: editor.isActive("bold"),
-      canBold: editor.can().chain().toggleBold().run(),
-      isItalic: editor.isActive("italic"),
-      canItalic: editor.can().chain().toggleItalic().run(),
-      isStrike: editor.isActive("strike"),
-      canStrike: editor.can().chain().toggleStrike().run(),
-      isUnderline: editor.isActive("underline"),
-      canUnderline: editor.can().chain().toggleUnderline().run(),
-      isCode: editor.isActive("code"),
-      canCode: editor.can().chain().toggleCode().run(),
-      heading: [1, 2, 3, 4, 5, 6].find((l) => editor.isActive("heading", { level: l })) || 0,
-      isBulletList: editor.isActive("bulletList"),
-      isOrderedList: editor.isActive("orderedList"),
-      isCodeBlock: editor.isActive("codeBlock"),
-      isBlockquote: editor.isActive("blockquote"),
-      isLink: editor.isActive("link"),
-      canUndo: editor.can().undo(),
-      canRedo: editor.can().redo(),
-    }),
+    selector: ({ editor }) => {
+      if (!editor) return EMPTY;
+      return {
+        isBold: editor.isActive("bold"),
+        isItalic: editor.isActive("italic"),
+        isStrike: editor.isActive("strike"),
+        isUnderline: editor.isActive("underline"),
+        isCode: editor.isActive("code"),
+        heading: editor.isActive("heading")
+          ? editor.getAttributes("heading").level
+          : 0,
+        isBulletList: editor.isActive("bulletList"),
+        isOrderedList: editor.isActive("orderedList"),
+        isCodeBlock: editor.isActive("codeBlock"),
+        isBlockquote: editor.isActive("blockquote"),
+        isLink: editor.isActive("link"),
+        canUndo: editor.can().undo(),
+        canRedo: editor.can().redo(),
+      };
+    },
   });
 
   if (!editor) return null;
+  // ...дальше всё как было (run, setLink, onHeadingChange, return)
 
   const run = () => editor.chain().focus();
 
   const setLink = () => {
     const prev = editor.getAttributes("link").href;
-    const url = window.prompt("Введите URL (пусто — убрать ссылку)", prev || "https://");
+    const url = window.prompt(
+      "Введите URL (пусто — убрать ссылку)",
+      prev || "https://",
+    );
     if (url === null) return;
     if (url === "") {
       run().extendMarkRange("link").unsetLink().run();
@@ -170,115 +160,140 @@ export default function MenuBar({ editor }) {
   };
 
   return (
-    <>
-      <style>{`
-        .mb-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: #e8e8e8 !important; }
-        .mb-select:hover { background: #e8e8e8; }
-      `}</style>
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b border-[#d5dae3] bg-white px-3 py-2 font-['Inter',Roboto,'Helvetica_Neue',Arial,sans-serif] sm:px-5">
+      <Group>
+        <Button
+          title="Отменить"
+          disabled={!s.canUndo}
+          onClick={() => run().undo().run()}
+        >
+          {icons.undo}
+        </Button>
+        <Button
+          title="Повторить"
+          disabled={!s.canRedo}
+          onClick={() => run().redo().run()}
+        >
+          {icons.redo}
+        </Button>
+      </Group>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          rowGap: "6px",
-          padding: "6px 20px",
-          borderBottom: "1px solid #000",
-          background: "#fff",
-        }}
-      >
-        <Group>
-          <Button title="Отменить" disabled={!s.canUndo} onClick={() => run().undo().run()}>
-            {icons.undo}
-          </Button>
-          <Button title="Повторить" disabled={!s.canRedo} onClick={() => run().redo().run()}>
-            {icons.redo}
-          </Button>
-        </Group>
+      <Divider />
 
-        <Divider />
+      <Group>
+        <select
+          className="h-8 min-w-36 cursor-pointer rounded-lg border-none bg-[#f0f2f6] px-2 text-[13px] text-[#1a1a1a] outline-none transition-colors hover:bg-[#e4e8f0] focus-visible:ring-2 focus-visible:ring-[#003399]/30"
+          title="Стиль текста"
+          value={s.heading}
+          onChange={onHeadingChange}
+        >
+          <option value={0}>Обычный текст</option>
+          {[1, 2, 3, 4, 5, 6].map((l) => (
+            <option key={l} value={l}>
+              Заголовок {l}
+            </option>
+          ))}
+        </select>
+      </Group>
 
-        <Group>
-          <select
-            className="mb-select"
-            title="Стиль текста"
-            value={s.heading}
-            onChange={onHeadingChange}
-            style={{
-              height: "28px",
-              padding: "0 8px",
-              fontSize: "13px",
-              fontFamily: "monospace",
-              background: "transparent",
-              color: "#000",
-              border: "none",
-              cursor: "pointer",
-              minWidth: "140px",
-            }}
-          >
-            <option value={0}>Обычный текст</option>
-            {[1, 2, 3, 4, 5, 6].map((l) => (
-              <option key={l} value={l}>
-                Заголовок {l}
-              </option>
-            ))}
-          </select>
-        </Group>
+      <Divider />
 
-        <Divider />
+      <Group>
+        <Button
+          title="Жирный (Ctrl+B)"
+          active={s.isBold}
+          onClick={() => run().toggleBold().run()}
+        >
+          <b>B</b>
+        </Button>
+        <Button
+          title="Курсив (Ctrl+I)"
+          active={s.isItalic}
+          onClick={() => run().toggleItalic().run()}
+        >
+          <i className="font-serif">I</i>
+        </Button>
+        <Button
+          title="Подчёркнутый (Ctrl+U)"
+          active={s.isUnderline}
+          onClick={() => run().toggleUnderline().run()}
+        >
+          <u>U</u>
+        </Button>
+        <Button
+          title="Зачёркнутый"
+          active={s.isStrike}
+          onClick={() => run().toggleStrike().run()}
+        >
+          <s>S</s>
+        </Button>
+        <Button
+          title="Код"
+          active={s.isCode}
+          onClick={() => run().toggleCode().run()}
+        >
+          {"</>"}
+        </Button>
+        <Button title="Ссылка" active={s.isLink} onClick={setLink}>
+          {icons.link}
+        </Button>
+      </Group>
 
-        <Group>
-          <Button title="Жирный (Ctrl+B)" active={s.isBold} disabled={!s.canBold} onClick={() => run().toggleBold().run()}>
-            <b>B</b>
-          </Button>
-          <Button title="Курсив (Ctrl+I)" active={s.isItalic} disabled={!s.canItalic} onClick={() => run().toggleItalic().run()}>
-            <i style={{ fontFamily: "Georgia, serif" }}>I</i>
-          </Button>
-          <Button title="Подчёркнутый (Ctrl+U)" active={s.isUnderline} disabled={!s.canUnderline} onClick={() => run().toggleUnderline().run()}>
-            <u>U</u>
-          </Button>
-          <Button title="Зачёркнутый" active={s.isStrike} disabled={!s.canStrike} onClick={() => run().toggleStrike().run()}>
-            <s>S</s>
-          </Button>
-          <Button title="Код" active={s.isCode} disabled={!s.canCode} onClick={() => run().toggleCode().run()}>
-            {"</>"}
-          </Button>
-          <Button title="Ссылка" active={s.isLink} onClick={setLink}>
-            {icons.link}
-          </Button>
-        </Group>
+      <Divider />
 
-        <Divider />
+      <Group>
+        <Button
+          title="Маркированный список"
+          active={s.isBulletList}
+          onClick={() => run().toggleBulletList().run()}
+        >
+          {icons.bullet}
+        </Button>
+        <Button
+          title="Нумерованный список"
+          active={s.isOrderedList}
+          onClick={() => run().toggleOrderedList().run()}
+        >
+          {icons.ordered}
+        </Button>
+        <Button
+          title="Цитата"
+          active={s.isBlockquote}
+          onClick={() => run().toggleBlockquote().run()}
+        >
+          <span className="mt-1.5 font-serif text-[22px] leading-none">“</span>
+        </Button>
+        <Button
+          title="Блок кода"
+          active={s.isCodeBlock}
+          onClick={() => run().toggleCodeBlock().run()}
+        >
+          {icons.codeBlock}
+        </Button>
+        <Button
+          title="Горизонтальная линия"
+          onClick={() => run().setHorizontalRule().run()}
+        >
+          {icons.hr}
+        </Button>
+        <Button
+          title="Перенос строки (Shift+Enter)"
+          onClick={() => run().setHardBreak().run()}
+        >
+          ↵
+        </Button>
+      </Group>
 
-        <Group>
-          <Button title="Маркированный список" active={s.isBulletList} onClick={() => run().toggleBulletList().run()}>
-            {icons.bullet}
-          </Button>
-          <Button title="Нумерованный список" active={s.isOrderedList} onClick={() => run().toggleOrderedList().run()}>
-            {icons.ordered}
-          </Button>
-          <Button title="Цитата" active={s.isBlockquote} onClick={() => run().toggleBlockquote().run()}>
-            <span style={{ fontFamily: "Georgia, serif", fontSize: "22px", lineHeight: 1, marginTop: "6px" }}>“</span>
-          </Button>
-          <Button title="Блок кода" active={s.isCodeBlock} onClick={() => run().toggleCodeBlock().run()}>
-            {icons.codeBlock}
-          </Button>
-          <Button title="Горизонтальная линия" onClick={() => run().setHorizontalRule().run()}>
-            {icons.hr}
-          </Button>
-          <Button title="Перенос строки (Shift+Enter)" onClick={() => run().setHardBreak().run()}>
-            ↵
-          </Button>
-        </Group>
+      <Divider />
 
-        <Divider />
-
-        <Group>
-          <Button title="Очистить форматирование" onClick={() => run().unsetAllMarks().clearNodes().run()}>
-            {icons.clear}
-          </Button>
-        </Group>
-      </div>
-    </>
+      <Group>
+        <Button
+          title="Очистить форматирование"
+          onClick={() => run().unsetAllMarks().clearNodes().run()}
+        >
+          {icons.clear}
+        </Button>
+      </Group>
+    </div>
   );
 }

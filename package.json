@@ -15,7 +15,9 @@
     "concurrently": "^8.2.0"
   },
   "dependencies": {
-    "@tiptap/extension-collaboration-cursor": "^2.26.2"
+    "@tailwindcss/vite": "^4.3.4",
+    "@tiptap/extension-collaboration-cursor": "^2.26.2",
+    "tailwindcss": "^4.3.4"
   },
   "allowScripts": {
     "esbuild@0.21.5": true,

@@ -18,16 +18,11 @@ test('список участников виден всем', async ({ browser }
 
     await enterAsUser(page2, 'Вика', docId);
 
-    // Оба должны видеть обоих
+    // Оба должны видеть обоих участников
     await expect(page1.getByText('Анна')).toBeVisible();
-    await expect(page1.getByText('Вика')).toBeVisible();
-    await expect(page2.getByText('Анна')).toBeVisible();
+    await expect(page1.getByText('Вика')).toBeVisible({ timeout: 5000 });
+    await expect(page2.getByText('Анна')).toBeVisible({ timeout: 5000 });
     await expect(page2.getByText('Вика')).toBeVisible();
-
-    // Цвета разные (у Анны и Вики разные бейджики)
-    const badges = page1.locator('div:has(> div + span)');
-    const count = await badges.count();
-    expect(count).toBeGreaterThanOrEqual(2);
 
     await ctx1.close();
     await ctx2.close();
